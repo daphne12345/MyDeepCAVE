@@ -21,6 +21,7 @@ class CostOverTime(DynamicPlugin):
     id = "cost_over_time"
     name = "Cost Over Time"
     icon = "fas fa-chart-line"
+    activate_run_selection = True
     help = "docs/plugins/cost_over_time.rst"
 
     def check_runs_compatibility(self, runs: List[AbstractRun]) -> None:
@@ -252,3 +253,4 @@ class CostOverTime(DynamicPlugin):
         save_image(figure, "cost_over_time.pdf")
 
         return figure
+    

@@ -19,5 +19,5 @@ def parse_url(pathname: str) -> Optional[Dict[str, Any]]:
         string = query["inputs"][0]
 
         return json.loads(string)
-
+        
     return None

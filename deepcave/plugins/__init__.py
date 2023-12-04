@@ -260,7 +260,6 @@ class Plugin(Layout, ABC):
             def plugin_input_update(pathname: str, *inputs_list: str) -> List[str]:
                 # Simple check if page was loaded for the first time
                 init = all(input is None for input in inputs_list)
-
                 # Reload our inputs
                 if init:
                     inputs = c.get("last_inputs", self.id)
@@ -322,7 +321,8 @@ class Plugin(Layout, ABC):
                                 inputs[id][attribute] = None
                     elif inputs is not None:
                         # We have to update the options of the run selection here.
-                        # This is important if the user have added/removed runs.
+                        # This is important if the user has added/removed runs.
+                        print("hallo")
                         if self.activate_run_selection:
                             run_value = inputs["run"]["value"]
                             new_inputs = self.__class__.load_run_inputs(

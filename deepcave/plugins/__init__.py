@@ -803,11 +803,21 @@ class Plugin(Layout, ABC):
         else:
             components += [html.H1(self.name)]
 
-        try:
-            self.check_runs_compatibility(self.all_runs)
-        except NotMergeableError as message:
-            notification.update(str(message))
-            return components
+        #If the runs for cost over time are not compatible
+        #it should still be possible to look at them separatly
+        if self.id == "cost_over_time":
+            try:
+                self.check_runs_compatibility(self.all_runs)
+            except NotMergeableError as message:
+                notification.update("The runs you chose could not be combined. You can still choose to look at the Cost Over Time for one specific run though.")
+                self.activate_run_selection = True
+                return components
+        else:
+            try:
+                self.check_runs_compatibility(self.all_runs)
+            except NotMergeableError as message:
+                notification.update(str(message))
+                return components
 
         if self.activate_run_selection:
             run_input_layout = [self.__class__.get_run_input_layout(self.register_input)]

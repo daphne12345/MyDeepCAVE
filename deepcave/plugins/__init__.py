@@ -322,7 +322,6 @@ class Plugin(Layout, ABC):
                     elif inputs is not None:
                         # We have to update the options of the run selection here.
                         # This is important if the user has added/removed runs.
-                        print("hallo")
                         if self.activate_run_selection:
                             run_value = inputs["run"]["value"]
                             new_inputs = self.__class__.load_run_inputs(
@@ -506,6 +505,7 @@ class Plugin(Layout, ABC):
         if mpl_active:
             outputs = self.__class__.load_mpl_outputs(passed_runs, cleaned_inputs, passed_outputs)
         else:
+            ("Hallo")
             outputs = self.__class__.load_outputs(passed_runs, cleaned_inputs, passed_outputs)
 
         logger.debug("Raw outputs processed successfully.")
@@ -803,21 +803,11 @@ class Plugin(Layout, ABC):
         else:
             components += [html.H1(self.name)]
 
-        #If the runs for cost over time are not compatible
-        #it should still be possible to look at them separatly
-        if self.id == "cost_over_time":
-            try:
-                self.check_runs_compatibility(self.all_runs)
-            except NotMergeableError as message:
-                notification.update("The runs you chose could not be combined. You can still choose to look at the Cost Over Time for one specific run though.")
-                self.activate_run_selection = True
-                return components
-        else:
-            try:
-                self.check_runs_compatibility(self.all_runs)
-            except NotMergeableError as message:
-                notification.update(str(message))
-                return components
+        try:
+            self.check_runs_compatibility(self.all_runs)
+        except NotMergeableError as message:
+            notification.update(str(message))
+            return components
 
         if self.activate_run_selection:
             run_input_layout = [self.__class__.get_run_input_layout(self.register_input)]

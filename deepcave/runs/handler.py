@@ -357,7 +357,6 @@ class RunHandler:
         for run in runs:
             if run.id == run_id:
                 return run
-
         raise RuntimeError("Run not found.")
 
     def get_groups(self) -> List[Group]:

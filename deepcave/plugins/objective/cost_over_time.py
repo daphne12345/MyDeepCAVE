@@ -15,21 +15,27 @@ from deepcave.utils.styled_plotty import (
     get_hovertext_from_config,
     save_image,
 )
+from deepcave.runs.group import NotMergeableError
+from deepcave import notification
 
 
 class CostOverTime(DynamicPlugin):
     id = "cost_over_time"
     name = "Cost Over Time"
     icon = "fas fa-chart-line"
-    activate_run_selection = False
+    activate_run_selection = True
     help = "docs/plugins/cost_over_time.rst"
 
     def check_runs_compatibility(self, runs: List[AbstractRun]) -> None:
-        check_equality(runs, objectives=True, budgets=True)
+        #If the runs are not mergeable, there should still
+        #be an option to look at one of the runs
+        try:
+            check_equality(runs, objectives=True, budgets=True)
+        except NotMergeableError:
+            notification.update("The runs you chose could not be combined. You can still choose to look at the Cost Over Time for one specific run though.")
 
         # Set some attributes here
         run = runs[0]
-
         objective_names = run.get_objective_names()
         objective_ids = run.get_objective_ids()
         self.objective_options = get_select_options(objective_names, objective_ids)
@@ -163,21 +169,17 @@ class CostOverTime(DynamicPlugin):
             return go.Figure()
 
         traces = []
-        for idx, run in enumerate(runs):
-            if run.prefix == "group" and not show_groups:
-                continue
-
-            if run.prefix != "group" and not show_runs:
-                continue
+        if isinstance(runs, AbstractRun):
+            run = runs
 
             objective = run.get_objective(inputs["objective_id"])
-            config_ids = outputs[run.id]["config_ids"]
-            x = outputs[run.id]["times"]
+            config_ids = outputs["config_ids"]
+            x = outputs["times"]
             if inputs["xaxis"] == "trials":
-                x = outputs[run.id]["ids"]
-
-            y = np.array(outputs[run.id]["costs_mean"])
-            y_err = np.array(outputs[run.id]["costs_std"])
+                x = outputs["ids"]
+            
+            y = np.array(outputs["costs_mean"])
+            y_err = np.array(outputs["costs_std"])
             y_upper = list(y + y_err)
             y_lower = list(y - y_err)
             y = list(y)
@@ -198,7 +200,7 @@ class CostOverTime(DynamicPlugin):
                     y=y,
                     name=run.name,
                     line_shape="hv",
-                    line=dict(color=get_color(idx)),
+                    line=dict(color=get_color(0)),
                     hovertext=hovertext,
                     hoverinfo=hoverinfo,
                     marker=dict(symbol=symbol),
@@ -207,30 +209,99 @@ class CostOverTime(DynamicPlugin):
             )
 
             traces.append(
-                go.Scatter(
-                    x=x,
-                    y=y_upper,
-                    line=dict(color=get_color(idx, 0)),
-                    line_shape="hv",
-                    hoverinfo="skip",
-                    showlegend=False,
-                    marker=dict(symbol=None),
+                    go.Scatter(
+                        x=x,
+                        y=y_upper,
+                        line=dict(color=get_color(0, 0)),
+                        line_shape="hv",
+                        hoverinfo="skip",
+                        showlegend=False,
+                        marker=dict(symbol=None),
+                    )
                 )
-            )
-
+            
             traces.append(
                 go.Scatter(
                     x=x,
                     y=y_lower,
                     fill="tonexty",
-                    fillcolor=get_color(idx, 0.2),
-                    line=dict(color=get_color(idx, 0)),
+                    fillcolor=get_color(0, 0.2),
+                    line=dict(color=get_color(0, 0)),
                     line_shape="hv",
                     hoverinfo="skip",
                     showlegend=False,
                     marker=dict(symbol=None),
                 )
             )
+        else:
+            for idx, run in enumerate(runs):
+                if run.prefix == "group" and not show_groups:
+                    continue
+
+                if run.prefix != "group" and not show_runs:
+                    continue
+
+                objective = run.get_objective(inputs["objective_id"])
+                config_ids = outputs[run.id]["config_ids"]
+                x = outputs[run.id]["times"]
+                if inputs["xaxis"] == "trials":
+                    x = outputs[run.id]["ids"]
+
+                y = np.array(outputs[run.id]["costs_mean"])
+                y_err = np.array(outputs[run.id]["costs_std"])
+                y_upper = list(y + y_err)
+                y_lower = list(y - y_err)
+                y = list(y)
+
+                hovertext = ""
+                hoverinfo = "skip"
+                symbol = None
+                mode = "lines"
+                if len(config_ids) > 0:
+                    hovertext = [get_hovertext_from_config(run, config_id) for config_id in config_ids]
+                    hoverinfo = "text"
+                    symbol = "circle"
+                    mode = "lines+markers"
+
+                traces.append(
+                    go.Scatter(
+                        x=x,
+                        y=y,
+                        name=run.name,
+                        line_shape="hv",
+                        line=dict(color=get_color(idx)),
+                        hovertext=hovertext,
+                        hoverinfo=hoverinfo,
+                        marker=dict(symbol=symbol),
+                        mode=mode,
+                    )
+                )
+
+                traces.append(
+                    go.Scatter(
+                        x=x,
+                        y=y_upper,
+                        line=dict(color=get_color(idx, 0)),
+                        line_shape="hv",
+                        hoverinfo="skip",
+                        showlegend=False,
+                        marker=dict(symbol=None),
+                    )
+                )
+
+                traces.append(
+                    go.Scatter(
+                        x=x,
+                        y=y_lower,
+                        fill="tonexty",
+                        fillcolor=get_color(idx, 0.2),
+                        line=dict(color=get_color(idx, 0)),
+                        line_shape="hv",
+                        hoverinfo="skip",
+                        showlegend=False,
+                        marker=dict(symbol=None),
+                    )
+                )
 
         if objective is None:
             raise PreventUpdate

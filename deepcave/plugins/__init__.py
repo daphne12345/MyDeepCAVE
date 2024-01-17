@@ -2,6 +2,7 @@ from abc import ABC
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import copy
+import itertools
 import re
 import webbrowser
 from collections import defaultdict
@@ -177,7 +178,6 @@ class Plugin(Layout, ABC):
             key = (id, attribute, filter, type_)
             if key not in self.inputs:
                 self.inputs.append(key)
-
         # We have to rearrange the inputs because `State`
         # must follow all `Input`. Since all filters are `Input`, we have to
         # shift them to the front.
@@ -313,7 +313,7 @@ class Plugin(Layout, ABC):
                             update_dict(inputs, new_inputs)
 
                         # Set not used inputs
-                        for (id, attribute, _, _) in self.inputs:
+                        for id, attribute, _, _ in self.inputs:
                             if id not in inputs:
                                 inputs[id] = {}
 
@@ -420,7 +420,7 @@ class Plugin(Layout, ABC):
             return is_open
 
         # Register callback to click on configurations
-        for (id, *_) in self.outputs:
+        for id, *_ in self.outputs:
             internal_id = self.get_internal_output_id(id)
 
             @app.callback(
@@ -469,8 +469,7 @@ class Plugin(Layout, ABC):
         # If only filters changed, then we don't need to
         # calculate the results again.
         if last_inputs is not None:
-            for (id, attribute, filter, _) in self.inputs:
-
+            for id, attribute, filter, _ in self.inputs:
                 if self.activate_run_selection:
                     if id == "run":
                         continue
@@ -524,7 +523,7 @@ class Plugin(Layout, ABC):
         # We have to add no_updates here for the mode we don't want
         count_outputs = 0
         count_mpl_outputs = 0
-        for (_, _, mpl_mode) in self.outputs:
+        for _, _, mpl_mode in self.outputs:
             if mpl_mode:
                 count_mpl_outputs += 1
             else:
@@ -569,7 +568,6 @@ class Plugin(Layout, ABC):
                 mapping[id] = {}
 
             mapping[id][attribute] = value
-
         return mapping
 
     @interactive
@@ -600,7 +598,7 @@ class Plugin(Layout, ABC):
             order = self.outputs  # type: ignore
 
         result: List[Optional[str]] = []
-        for (id, attribute, instance, *_) in order:
+        for id, attribute, instance, *_ in order:
             if not input:
                 # Instance is mlp_mode in case of outputs
                 # Simply ignore other outputs.
@@ -637,7 +635,7 @@ class Plugin(Layout, ABC):
 
         new_d = copy.deepcopy(d)
         if remove_filters:
-            for (id, _, filter, _) in self.inputs:
+            for id, _, filter, _ in self.inputs:
                 if filter:
                     if id in new_d:
                         del new_d[id]
@@ -662,10 +660,9 @@ class Plugin(Layout, ABC):
         casted_inputs: Dict[str, Dict[str, str]] = defaultdict(dict)
         for id, attributes in inputs.items():
             for attribute in attributes:
-
                 # Find corresponding input
                 type = None
-                for (id_, attribute_, _, type_) in self.inputs:
+                for id_, attribute_, _, type_ in self.inputs:
                     if id == id_ and attribute == attribute_:
                         type = type_
                         break
@@ -702,7 +699,7 @@ class Plugin(Layout, ABC):
         """
         used_ids = []
         cleaned_inputs = {}
-        for (id, attribute, *_) in self.inputs:
+        for id, attribute, *_ in self.inputs:
             # Since self.inputs is ordered, we use the first occuring attribute and add
             # the id so it is not used again.
             if id not in used_ids:
@@ -802,6 +799,7 @@ class Plugin(Layout, ABC):
             ]
         else:
             components += [html.H1(self.name)]
+
 
         try:
             self.check_runs_compatibility(self.all_runs)
@@ -1332,7 +1330,7 @@ class Plugin(Layout, ABC):
             The inputs for the run.
         """
         mapping = {}
-        for (id, attribute, *_) in self.inputs:
+        for id, attribute, *_ in self.inputs:
             # Since `self.inputs` is ordered, we use the first occuring attribute and add
             # the id so it is not used again.
             if id not in mapping:

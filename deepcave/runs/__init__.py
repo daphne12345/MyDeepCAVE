@@ -986,5 +986,4 @@ def check_equality(
         result["objectives"] = serialized_objectives
         if meta:
             result["meta"]["objectives"] = serialized_objectives
-
     return result

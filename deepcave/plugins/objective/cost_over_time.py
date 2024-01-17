@@ -6,17 +6,16 @@ import plotly.graph_objs as go
 from dash import dcc, html
 from dash.exceptions import PreventUpdate
 
-from deepcave import config
+from deepcave import config, notification
 from deepcave.plugins.dynamic import DynamicPlugin
 from deepcave.runs import AbstractRun, check_equality
+from deepcave.runs.group import NotMergeableError
 from deepcave.utils.layout import get_select_options, help_button
 from deepcave.utils.styled_plotty import (
     get_color,
     get_hovertext_from_config,
     save_image,
 )
-from deepcave.runs.group import NotMergeableError
-from deepcave import notification
 
 
 class CostOverTime(DynamicPlugin):
@@ -27,12 +26,21 @@ class CostOverTime(DynamicPlugin):
     help = "docs/plugins/cost_over_time.rst"
 
     def check_runs_compatibility(self, runs: List[AbstractRun]) -> None:
-        #If the runs are not mergeable, there should still
-        #be an option to look at one of the runs
+        # If the runs are not mergeable, there should still
+        # be an option to look at one of the runs
         try:
             check_equality(runs, objectives=True, budgets=True)
+            if self.activate_run_selection == True:
+                self.activate_run_selection = False
+                self.inputs.remove(('run', 'value', False, None))
+                self.inputs.remove(('run', 'options', False, None))
+                DynamicPlugin.register_callbacks(self)
+            
         except NotMergeableError:
-            notification.update("The runs you chose could not be combined. You can still choose to look at the Cost Over Time for one specific run though.")
+            notification.update(
+                "The runs you chose could not be combined. You can still choose to look at the Cost Over Time for one specific run though."
+            )
+            self.activate_run_selection = True
 
         # Set some attributes here
         run = runs[0]
@@ -177,7 +185,7 @@ class CostOverTime(DynamicPlugin):
             x = outputs["times"]
             if inputs["xaxis"] == "trials":
                 x = outputs["ids"]
-            
+
             y = np.array(outputs["costs_mean"])
             y_err = np.array(outputs["costs_std"])
             y_upper = list(y + y_err)
@@ -209,17 +217,17 @@ class CostOverTime(DynamicPlugin):
             )
 
             traces.append(
-                    go.Scatter(
-                        x=x,
-                        y=y_upper,
-                        line=dict(color=get_color(0, 0)),
-                        line_shape="hv",
-                        hoverinfo="skip",
-                        showlegend=False,
-                        marker=dict(symbol=None),
-                    )
+                go.Scatter(
+                    x=x,
+                    y=y_upper,
+                    line=dict(color=get_color(0, 0)),
+                    line_shape="hv",
+                    hoverinfo="skip",
+                    showlegend=False,
+                    marker=dict(symbol=None),
                 )
-            
+            )
+
             traces.append(
                 go.Scatter(
                     x=x,
@@ -258,7 +266,9 @@ class CostOverTime(DynamicPlugin):
                 symbol = None
                 mode = "lines"
                 if len(config_ids) > 0:
-                    hovertext = [get_hovertext_from_config(run, config_id) for config_id in config_ids]
+                    hovertext = [
+                        get_hovertext_from_config(run, config_id) for config_id in config_ids
+                    ]
                     hoverinfo = "text"
                     symbol = "circle"
                     mode = "lines+markers"
@@ -324,4 +334,3 @@ class CostOverTime(DynamicPlugin):
         save_image(figure, "cost_over_time.pdf")
 
         return figure
-    

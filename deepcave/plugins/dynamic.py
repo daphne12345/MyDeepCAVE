@@ -26,7 +26,6 @@ class DynamicPlugin(Plugin, ABC):
         inputs = [Input(self.get_internal_id("update-button"), "n_clicks")]
         for id, attribute, _, _ in self.inputs:
             inputs.append(Input(self.get_internal_input_id(id), attribute))
-
         # Register updates from inputs
         @app.callback(outputs, inputs)
         def plugin_output_update(_, *inputs_list):  # type: ignore

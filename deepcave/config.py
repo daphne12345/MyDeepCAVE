@@ -47,7 +47,7 @@ class Config:
 
     # General config
     TITLE: str = "DeepCAVE"
-    DEBUG: bool = False
+    DEBUG: bool = True
     # How often to refresh background activities (such as update the sidebar or process button for
     # static plugins). Value in milliseconds.
     REFRESH_RATE: int = 500
@@ -94,6 +94,9 @@ class Config:
     def PLUGINS(self) -> Dict[str, List[Any]]:
         """A list of available plugins per category."""
         from deepcave.plugins.budget.budget_correlation import BudgetCorrelation
+        from deepcave.plugins.hyperparameter.ablation_importances import (
+            AblationImportances,
+        )
         from deepcave.plugins.hyperparameter.importances import Importances
         from deepcave.plugins.hyperparameter.pdp import PartialDependencies
         from deepcave.plugins.hyperparameter.symbolic_explanations import (
@@ -125,6 +128,7 @@ class Config:
             ],
             "Hyperparameter Analysis": [
                 Importances(),
+                AblationImportances(),
                 PartialDependencies(),
                 SymbolicExplanations(),
             ],

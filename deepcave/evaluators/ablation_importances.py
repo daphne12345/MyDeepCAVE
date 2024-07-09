@@ -95,9 +95,6 @@ class AblationImportances:
         def_performance = 1 - cost_mean_def
         inc_performance = 1 - cost_mean_inc
 
-        # This is for sorting purposes in the 'importance' plugin
-        importances["sort"] = (0, 0)
-
         if inc_performance < def_performance:
             print(
                 "The predicted incumbent performance is smaller than the predicted "
@@ -106,6 +103,7 @@ class AblationImportances:
                 ". This could mean that the configuration space which with the surrogate "
                 "model was trained is too small.",
             )
+
             importances = {hp_name: (0, 0) for hp_name in self.hp_names}
         else:
             # Copy the hps names as to not remove objects from the original list
@@ -149,11 +147,7 @@ class AblationImportances:
         """
         if self.importances is None:
             raise RuntimeError("Importance scores must be calculated first.")
-        self.importances = {
-            key: self.importances[key]
-            for key in hp_names
-            if key in self.importances or key == "sort"
-        }
+
         return self.importances
 
     def _ablation(

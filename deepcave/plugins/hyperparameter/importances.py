@@ -74,7 +74,7 @@ class Importances(StaticPlugin):
                         [
                             dbc.Label("Objective 1"),
                             dbc.Select(
-                                id=register("objective_id", ["value", "options"], type=int),
+                                id=register("objective_id1", ["value", "options"], type=int),
                                 placeholder="Select objective ...",
                             ),
                         ],
@@ -84,7 +84,7 @@ class Importances(StaticPlugin):
                         [
                             dbc.Label("Objective 2"),
                             dbc.Select(
-                                id=register("objective_id", ["value", "options"], type=int),
+                                id=register("objective_id2", ["value", "options"], type=int),
                                 placeholder="Select objective ...",
                             ),
                         ],

@@ -25,7 +25,7 @@ from deepcave.runs.objective import Objective
 
 
 # https://github.com/automl/ParameterImportance/blob/f4950593ee627093fc30c0847acc5d8bf63ef84b/pimp/evaluator/local_parameter_importance.py#L27
-class LPI:
+class MOLPI:
     """
     Calculate the local parameter importance (LPI).
 

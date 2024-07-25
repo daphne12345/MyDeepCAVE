@@ -24,7 +24,7 @@ from deepcave.runs.objective import Objective
 from deepcave.utils.logs import get_logger
 
 
-class fANOVA:
+class MOfANOVA:
     """
     Calculate and provide midpoints and sizes.
 

@@ -22,6 +22,8 @@ from dash.exceptions import PreventUpdate
 
 from deepcave import config
 from deepcave.evaluators.fanova import fANOVA as GlobalEvaluator
+from deepcave.evaluators.mo_fanova import MOfANOVA
+from deepcave.evaluators.mo_lpi import MOLPI
 from deepcave.evaluators.lpi import LPI as LocalEvaluator
 from deepcave.plugins.static import StaticPlugin
 from deepcave.runs import AbstractRun
@@ -66,16 +68,6 @@ class Importances(StaticPlugin):
             Layout for the input block.
         """
         return [
-            # html.Div(
-            #     [
-            #         dbc.Label("Objective"),
-            #         dbc.Select(
-            #             id=register("objective_id", ["value", "options"], type=int),
-            #             placeholder="Select objective ...",
-            #         ),
-            #     ],
-            #     className="mb-3",
-            # ),
             dbc.Row(
                 [
                     dbc.Col(
@@ -236,7 +228,8 @@ class Importances(StaticPlugin):
         objective_names = run.get_objective_names()
         objective_ids = run.get_objective_ids()
         objective_options = get_select_options(objective_names, objective_ids)
-        objective_value = inputs["objective_id"]["value"]
+        objective_value1 = inputs["objective_id1"]["value"]
+        objective_value2 = inputs["objective_id2"]["value"]
 
         #TODO add objective_value2 (eine Zeile)
 
@@ -252,9 +245,8 @@ class Importances(StaticPlugin):
         n_hps = inputs["n_hps"]["value"]
 
         # Pre-set values
-        if objective_value is None:
-            objective_value = objective_ids[0]
-            # TODO objective_value1 = None
+        if objective_value1 is None:
+            objective_value1 = objective_ids[0]
 
         if n_hps == 0:
             n_hps = len(hp_names)
@@ -267,11 +259,14 @@ class Importances(StaticPlugin):
                 budget_value = [budget_ids[-1]]
 
         return {
-            "objective_id": {
+            "objective_id1": {
                 "options": objective_options,
-                "value": objective_value,
+                "value": objective_value1,
             },
-            # TODO return Objective value 2
+            "objective_id2": {
+                "options": objective_options,
+                "value": objective_value2,
+            },
             "method": {
                 "value": inputs["method"]["value"],
             },
@@ -320,8 +315,9 @@ class Importances(StaticPlugin):
             If the number of trees is not specified.
             If the method is not found.
         """
-        objective = run.get_objective(inputs["objective_id"])
-        #TODO objective id 2
+        objective = run.get_objective(inputs["objective_id1"])
+        if inputs["objective_id2"]:
+            objective = [objective, run.get_objective(inputs["objective_id2"])]
         method = inputs["method"]
         n_trees = inputs["n_trees"]
 
@@ -355,10 +351,14 @@ class Importances(StaticPlugin):
         budgets = run.get_budgets(include_combined=True)
 
         evaluator: Optional[Union[LocalEvaluator, GlobalEvaluator]] = None
-        #TODO add if 2nd objective not None, do mo_evaluator
-        if method == "local":
+        if method == "local" and isinstance(objective,list):
+            # Initialize the evaluator
+            evaluator = MOLPI(run)
+        elif method == "local":
             # Initialize the evaluator
             evaluator = LocalEvaluator(run)
+        elif method == "global" and isinstance(objective,list):
+            evaluator = MOfANOVA(run)
         elif method == "global":
             evaluator = GlobalEvaluator(run)
         else:

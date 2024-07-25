@@ -230,6 +230,7 @@ class Importances(StaticPlugin):
         objective_options = get_select_options(objective_names, objective_ids)
         objective_value1 = inputs["objective_id1"]["value"]
         objective_value2 = inputs["objective_id2"]["value"]
+        print(objective_options, objective_value1, objective_value2)
 
         #TODO add objective_value2 (eine Zeile)
 

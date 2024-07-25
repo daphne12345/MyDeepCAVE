@@ -43,7 +43,7 @@ class Importances(StaticPlugin):
     """
 
     id = "importances"
-    name = "Importances"
+    name = "Importances1"
     icon = "far fa-star"
     help = "docs/plugins/importances.rst"
     activate_run_selection = True

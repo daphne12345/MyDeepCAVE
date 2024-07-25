@@ -227,7 +227,7 @@ class Importances(StaticPlugin):
         # Prepare objectives
         objective_names = run.get_objective_names()
         objective_ids = run.get_objective_ids()
-        objective_options = get_select_options(objective_names, objective_ids) + [None]
+        objective_options = get_select_options(objective_names, objective_ids)
         objective_value1 = inputs["objective_id1"]["value"]
         objective_value2 = inputs["objective_id2"]["value"]
 
@@ -262,7 +262,7 @@ class Importances(StaticPlugin):
                 "value": objective_value1,
             },
             "objective_id2": {
-                "options": objective_options,
+                "options": objective_options + ['No Objective'],
                 "value": objective_value2,
             },
             "method": {

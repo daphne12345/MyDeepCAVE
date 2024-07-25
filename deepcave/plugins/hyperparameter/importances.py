@@ -43,7 +43,7 @@ class Importances(StaticPlugin):
     """
 
     id = "importances"
-    name = "Importances1"
+    name = "Importances"
     icon = "far fa-star"
     help = "docs/plugins/importances.rst"
     activate_run_selection = True
@@ -66,15 +66,39 @@ class Importances(StaticPlugin):
             Layout for the input block.
         """
         return [
-            html.Div(
+            # html.Div(
+            #     [
+            #         dbc.Label("Objective"),
+            #         dbc.Select(
+            #             id=register("objective_id", ["value", "options"], type=int),
+            #             placeholder="Select objective ...",
+            #         ),
+            #     ],
+            #     className="mb-3",
+            # ),
+            dbc.Row(
                 [
-                    dbc.Label("Objective"),
-                    dbc.Select(
-                        id=register("objective_id", ["value", "options"], type=int),
-                        placeholder="Select objective ...",
+                    dbc.Col(
+                        [
+                            dbc.Label("Objective 1"),
+                            dbc.Select(
+                                id=register("objective_id", ["value", "options"], type=int),
+                                placeholder="Select objective ...",
+                            ),
+                        ],
+                        md=6,
+                    ),
+                    dbc.Col(
+                        [
+                            dbc.Label("Objective 2"),
+                            dbc.Select(
+                                id=register("objective_id", ["value", "options"], type=int),
+                                placeholder="Select objective ...",
+                            ),
+                        ],
+                        md=6,
                     ),
                 ],
-                className="mb-3",
             ),
             dbc.Row(
                 [

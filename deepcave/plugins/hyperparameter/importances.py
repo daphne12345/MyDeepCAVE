@@ -264,7 +264,7 @@ class Importances(StaticPlugin):
                 "value": objective_value1,
             },
             "objective_id2": {
-                "options": objective_options,
+                "options": objective_options + [None],
                 "value": objective_value2,
             },
             "method": {

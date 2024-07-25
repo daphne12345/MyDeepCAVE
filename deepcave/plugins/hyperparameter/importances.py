@@ -227,6 +227,8 @@ class Importances(StaticPlugin):
         # Prepare objectives
         objective_names = run.get_objective_names()
         objective_ids = run.get_objective_ids()
+        # TODO possibility to deselect objective 2 (e.g. None in drop down)
+        # TODO when selecting an objective, it should disappear in list of the other, so that it cannot be the same objective twice
         objective_options = get_select_options(objective_names, objective_ids)
         objective_value1 = inputs["objective_id1"]["value"]
         objective_value2 = inputs["objective_id2"]["value"]
@@ -262,7 +264,7 @@ class Importances(StaticPlugin):
                 "value": objective_value1,
             },
             "objective_id2": {
-                "options": objective_options + ['No Objective'],
+                "options": objective_options,
                 "value": objective_value2,
             },
             "method": {

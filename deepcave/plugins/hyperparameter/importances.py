@@ -50,6 +50,7 @@ class Importances(StaticPlugin):
 
     @staticmethod
     def get_input_layout(register: Callable) -> List[Any]:
+        # TODO add second objective as second column nextto it (von Method kopieren)
         """
         Get the layout for the input block.
 
@@ -213,6 +214,8 @@ class Importances(StaticPlugin):
         objective_options = get_select_options(objective_names, objective_ids)
         objective_value = inputs["objective_id"]["value"]
 
+        #TODO add objective_value2 (eine Zeile)
+
         # Prepare budgets
         budgets = run.get_budgets(human=True)
         budget_ids = run.get_budget_ids()
@@ -227,6 +230,7 @@ class Importances(StaticPlugin):
         # Pre-set values
         if objective_value is None:
             objective_value = objective_ids[0]
+            # TODO objective_value1 = None
 
         if n_hps == 0:
             n_hps = len(hp_names)
@@ -243,6 +247,7 @@ class Importances(StaticPlugin):
                 "options": objective_options,
                 "value": objective_value,
             },
+            # TODO return Objective value 2
             "method": {
                 "value": inputs["method"]["value"],
             },
@@ -292,6 +297,7 @@ class Importances(StaticPlugin):
             If the method is not found.
         """
         objective = run.get_objective(inputs["objective_id"])
+        #TODO objective id 2
         method = inputs["method"]
         n_trees = inputs["n_trees"]
 
@@ -325,6 +331,7 @@ class Importances(StaticPlugin):
         budgets = run.get_budgets(include_combined=True)
 
         evaluator: Optional[Union[LocalEvaluator, GlobalEvaluator]] = None
+        #TODO add if 2nd objective not None, do mo_evaluator
         if method == "local":
             # Initialize the evaluator
             evaluator = LocalEvaluator(run)
@@ -337,6 +344,7 @@ class Importances(StaticPlugin):
         data = {}
         for budget_id, budget in enumerate(budgets):
             assert isinstance(budget, (int, float))
+            # TODO objective als Liste übergeben
             evaluator.calculate(objective, budget, n_trees=n_trees, seed=0)
 
             importances = evaluator.get_importances(hp_names)

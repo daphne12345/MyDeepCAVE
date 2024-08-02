@@ -236,7 +236,7 @@ class Importances(StaticPlugin):
 
         objective_options = get_select_options(objective_names, objective_ids)
         print(objective_options)
-        objective_options2 = [dic for dic in objective_options if dic['value'] != objective_value1]
+        objective_options2 = [dic for dic in objective_options if dic['value'] != objective_value1] + [{'label': 'No 2nd Objective', 'value': 2}]
         print(objective_options2)
 
         # Prepare budgets

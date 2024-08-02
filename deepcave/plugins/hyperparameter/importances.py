@@ -236,9 +236,9 @@ class Importances(StaticPlugin):
         objective_options = get_select_options(objective_names, objective_ids)
         objective_options2 = [dic for dic in objective_options if dic['value'] != objective_value1]
         objective_options2 +=  [{'label': 'Select objective ...', 'value': 2}]
-        objective_names2 = [obj for obj in objective_names if obj != objective_value1]
+        objective_names2 = [obj['label'] for obj in objective_options if obj['label'] != objective_value1]
         print(objective_names2)
-        objective_ids2 = [id for id in objective_ids if id != inputs["objective_id1"]]
+        objective_ids2 = [id['value'] for id in objective_options if id['value'] != inputs["objective_id1"]]
         print(objective_ids2)
         objective_options2 = get_select_options(objective_names2 + ['Select objective ...'], objective_ids2 + [10])
 

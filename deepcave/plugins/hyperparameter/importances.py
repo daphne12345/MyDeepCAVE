@@ -354,17 +354,13 @@ class Importances(StaticPlugin):
         budgets = run.get_budgets(include_combined=True)
 
         evaluator: Optional[Union[LocalEvaluator, GlobalEvaluator]] = None
-        print(method)
-        print(objective)
         if method == "local" and isinstance(objective,list):
             # Initialize the evaluator
-            print('mo')
             evaluator = MOLPI(run)
         elif method == "local":
             # Initialize the evaluator
             evaluator = LocalEvaluator(run)
         elif method == "global" and isinstance(objective,list):
-            print('mo')
             evaluator = MOfANOVA(run)
         elif method == "global":
             evaluator = GlobalEvaluator(run)
@@ -375,7 +371,6 @@ class Importances(StaticPlugin):
         data = {}
         for budget_id, budget in enumerate(budgets):
             assert isinstance(budget, (int, float))
-            # TODO objective als Liste übergeben
             evaluator.calculate(objective, budget, n_trees=n_trees, seed=0)
 
             importances = evaluator.get_importances(hp_names)

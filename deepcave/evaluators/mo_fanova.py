@@ -22,6 +22,7 @@ from deepcave.evaluators.epm.fanova_forest import FanovaForest
 from deepcave.runs import AbstractRun
 from deepcave.runs.objective import Objective
 from deepcave.utils.logs import get_logger
+import pandas as pd
 
 
 class MOfANOVA:
@@ -204,124 +205,83 @@ class MOfANOVA:
 
         return importances_
 
-    '''
-    def marginal_mean_variance_for_values(self, dimlist, values_to_predict):
+
+
+
+
+class fANOVAWeighted(fANOVA):
+    """
+    Calculate and provide midpoints and sizes from the forest's split values in order to get the marginals.
+    Overriden to train the random forest with an arbitrary weighting of the objectives.
+    """
+
+    def __init__(self, run: AbstractRun):
+        if run.configspace is None:
+            raise RuntimeError("The run needs to be initialized.")
+
+        super().__init__(run)
+        self.n_trees = 100
+
+
+
+    def calculate(
+        self,
+        objectives: Optional[Union[Objective, List[Objective]]] = None,
+        budget: Optional[Union[int, float]] = None,
+        n_trees: int = 16,
+        seed: int = 0,
+    ) -> None:
         """
-        Return the marginal of selected parameters for specific values
+        Get the data with respect to budget and train the forest on the encoded data.
+        # TODO fix Kommentar
+        Calculates weighted fAnova for multiple objectives.
+        :param group: the runs as group
+        :param df: dataframe containing the encoded data
+        :param objectives_normed: the normalized objective names as a list of strings
+        :param weightings: the weightings as list of lists
+        :return: the dataframe containing the importances for each hyperparameter per weighting
+
+
+        Note
+        ----
+        Right now, only `n_trees` is used. It can be further specified if needed.
 
         Parameters
         ----------
-        dimlist: list
-                Contains the indices of ConfigSpace for the selected parameters
-                (starts with 0)
-        values_to_predict: list
-                Contains the values to be predicted
-
-        Returns
-        -------
-        tuple
-            marginal mean prediction and corresponding variance estimate
+        objectives : Optional[Union[Objective, List[Objective]]], optional
+            Considered objectives. By default None. If None, all objectives are considered.
+        budget : Optional[Union[int, float]], optional
+            Considered budget. By default None. If None, the highest budget is chosen.
+        n_trees : int, optional
+            How many trees should be used. By default 16.
+        seed : int
+            Random seed. By default 0.
         """
-        sample = np.full(self.n_dims, np.nan, dtype=np.float)
-        for i in range(len(dimlist)):
-            sample[dimlist[i]] = values_to_predict[i]
+        if objectives is None:
+            objectives = self.run.get_objectives()
 
-        return self._model.forest.marginal_mean_variance_prediction(sample)
+        if budget is None:
+            budget = self.run.get_highest_budget()
 
-    def get_most_important_pairwise_marginals(self, params=None, n=10):
-        """
-        Return the n most important pairwise marginals from the whole ConfigSpace.
+        self.n_trees = n_trees
 
-        Parameters
-        ----------
-        params: list of strings or ints
-            If specified, limit analysis to those parameters. If ints, interpreting as indices from
-            ConfigurationSpace
-        n: int
-             The number of most relevant pairwise marginals that will be returned
+        # Get data
+        df = self.run.get_encoded_data(
+            objectives, budget, specific=True, include_combined_cost=True
+        )
+        X = df[self.hp_names].to_numpy()
 
-        Returns
-        -------
-        list:
-             Contains the n most important pairwise marginals
-        """
-        self.tot_imp_dict = OrderedDict()
-        pairwise_marginals = []
-        if params is None:
-            dimensions = range(self.n_dims)
-        else:
-            if type(params[0]) == str:
-                idx = []
-                for i, param in enumerate(params):
-                    idx.append(self.cs.get_idx_by_hyperparameter_name(param))
-                dimensions = idx
+        # TODO calculate weightings from run
+        #TODO calculate normed objectives
+        # TODO return df_all somwhow
+        # TODO create MO plot instead of single objective
+        for w in weightings:
+            Y = sum(df[obj] * weighting for obj, weighting in zip(objectives_normed, weighting)).to_numpy()
 
-            else:
-                dimensions = params
-        # pairs = it.combinations(dimensions,2)
-        pairs = [x for x in it.combinations(dimensions, 2)]
-        if params:
-            n = len(list(pairs))
-        for combi in pairs:
-            pairwise_marginal_performance = self.quantify_importance(combi)
-            tot_imp = pairwise_marginal_performance[combi]["individual importance"]
-            combi_names = [self.hps[combi[0]].name, self.hps[combi[1]].name]
-            pairwise_marginals.append((tot_imp, combi_names[0], combi_names[1]))
+            self._model = FanovaForest(self.cs, n_trees=n_trees, seed=seed)
+            self._model.train(X, Y)
+            df_res = pd.DataFrame(self._model.get_importances(hp_names=None)).loc[0:1].T.reset_index()
+            df_res['weight_for_' + objectives_normed[0]] = w[0]
+            df_all = pd.concat([df_all, df_res])
+        df_all = df_all.rename(columns={0: 'fanova', 1: 'variance', 'index': 'hp_name'})
 
-        pairwise_marginal_performance = sorted(pairwise_marginals, reverse=True)
-
-        for marginal, p1, p2 in pairwise_marginal_performance[:n]:
-            self.tot_imp_dict[(p1, p2)] = marginal
-
-        return self.tot_imp_dict
-
-    def get_triple_marginals(self, params=None):
-        """
-        Return the n most important pairwise marginals from the whole ConfigSpace
-
-        Parameters
-        ----------
-        params: list
-             The parameters
-
-        Returns
-        -------
-        list:
-             Contains most important triple marginals
-        """
-        self.tot_imp_dict = OrderedDict()
-        triple_marginals = []
-        if len(params) < 3:
-            raise RuntimeError(
-                "Number of parameters have to be greater than %i. At least 3 parameters needed"
-                % len(params)
-            )
-        if type(params[0]) == str:
-            idx = []
-            for i, param in enumerate(params):
-                idx.append(self.cs.get_idx_by_hyperparameter_name(param))
-            dimensions = idx
-
-        else:
-            dimensions = params
-
-        triplets = [x for x in it.combinations(dimensions, 3)]
-        for combi in triplets:
-            triple_marginal_performance = self.quantify_importance(combi)
-            tot_imp = triple_marginal_performance[combi]["individual importance"]
-            combi_names = [
-                self.hps[combi[0]].name,
-                self.hps[combi[1]].name,
-                self.hps[combi[2]].name,
-            ]
-            triple_marginals.append((tot_imp, combi_names[0], combi_names[1], combi_names[2]))
-
-        triple_marginal_performance = sorted(triple_marginals, reverse=True)
-        if params:
-            triple_marginal_performance = triple_marginal_performance[: len(list(triplets))]
-
-        for marginal, p1, p2, p3 in triple_marginal_performance:
-            self.tot_imp_dict[(p1, p2, p3)] = marginal
-
-        return self.tot_imp_dict
-    '''

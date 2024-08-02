@@ -233,7 +233,7 @@ class Importances(StaticPlugin):
         objective_options = get_select_options(objective_names, objective_ids)
         # TODO: update list of options immediately
         objective_options2 = [dic for dic in objective_options if dic['value'] != objective_value1] # make sure the same objective cannot be chosen twice
-        objective_options2 +=  [{'label': 'Select objective ...', 'value': 2}] # add the option to deselect the second objective
+        objective_options2 +=  [{'label': 'Select objective ...', 'value': -1}] # add the option to deselect the second objective
 
         # Prepare budgets
         budgets = run.get_budgets(human=True)
@@ -319,7 +319,8 @@ class Importances(StaticPlugin):
         """
         objective = run.get_objective(inputs["objective_id1"])
         if inputs["objective_id2"]:
-            objective = [objective, run.get_objective(inputs["objective_id2"])]
+            if inputs["objective_id2"] !=-1:
+                objective = [objective, run.get_objective(inputs["objective_id2"])]
         method = inputs["method"]
         n_trees = inputs["n_trees"]
 
@@ -355,11 +356,13 @@ class Importances(StaticPlugin):
         evaluator: Optional[Union[LocalEvaluator, GlobalEvaluator]] = None
         if method == "local" and isinstance(objective,list):
             # Initialize the evaluator
+            print('mo')
             evaluator = MOLPI(run)
         elif method == "local":
             # Initialize the evaluator
             evaluator = LocalEvaluator(run)
         elif method == "global" and isinstance(objective,list):
+            print('mo')
             evaluator = MOfANOVA(run)
         elif method == "global":
             evaluator = GlobalEvaluator(run)

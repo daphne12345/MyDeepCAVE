@@ -232,9 +232,12 @@ class Importances(StaticPlugin):
 
         objective_value1 = inputs["objective_id1"]["value"]
         objective_value2 = inputs["objective_id2"]["value"]
+        print(objective_value1)
 
         objective_options = get_select_options(objective_names, objective_ids)
+        print(objective_options)
         objective_options2 = {option: value for option, value in objective_options if value != objective_value1}
+        print(objective_options2)
 
         # Prepare budgets
         budgets = run.get_budgets(human=True)

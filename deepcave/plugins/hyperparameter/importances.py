@@ -229,9 +229,13 @@ class Importances(StaticPlugin):
         objective_ids = run.get_objective_ids()
         # TODO possibility to deselect objective 2 (e.g. None in drop down)
         # TODO when selecting an objective, it should disappear in list of the other, so that it cannot be the same objective twice
-        objective_options = get_select_options(objective_names, objective_ids)
+
         objective_value1 = inputs["objective_id1"]["value"]
         objective_value2 = inputs["objective_id2"]["value"]
+
+        objective_options_1 = get_select_options(list(set(objective_names) - set([objective_value2])), list(set(objective_ids) - set([inputs["objective_id2"]])))
+        objective_options_2 = get_select_options(list(set(objective_names) - set([objective_value1])), list(set(objective_ids) - set([inputs["objective_id1"]])))
+        # objective_options = get_select_options(objective_names, objective_ids)
 
         # Prepare budgets
         budgets = run.get_budgets(human=True)
@@ -260,11 +264,11 @@ class Importances(StaticPlugin):
 
         return {
             "objective_id1": {
-                "options": objective_options,
+                "options": objective_options_1,
                 "value": objective_value1,
             },
             "objective_id2": {
-                "options": objective_options,
+                "options": objective_options_2,
                 "value": objective_value2,
             },
             "method": {

@@ -234,7 +234,7 @@ class Importances(StaticPlugin):
         objective_value2 = inputs["objective_id2"]["value"]
 
         objective_options = get_select_options(objective_names, objective_ids)
-        objective_options2 = [dic for dic in objective_options if dic['value'] != objective_value1] + [{'label': None, 'value': 2}]
+        objective_options2 = [dic for dic in objective_options if dic['value'] != objective_value1] + [{'label': None, 'value': None}]
 
         # Prepare budgets
         budgets = run.get_budgets(human=True)

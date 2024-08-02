@@ -354,6 +354,8 @@ class Importances(StaticPlugin):
         budgets = run.get_budgets(include_combined=True)
 
         evaluator: Optional[Union[LocalEvaluator, GlobalEvaluator]] = None
+        print(method)
+        print(objective)
         if method == "local" and isinstance(objective,list):
             # Initialize the evaluator
             print('mo')

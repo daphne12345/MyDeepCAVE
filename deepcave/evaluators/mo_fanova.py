@@ -25,7 +25,7 @@ from deepcave.runs.objective import Objective
 from deepcave.utils.logs import get_logger
 import pandas as pd
 
-class fANOVAWeighted(fANOVA):
+class MOfANOVA(fANOVA):
     """
     Calculate and provide midpoints and sizes from the forest's split values in order to get the marginals.
     Overriden to train the random forest with an arbitrary weighting of the objectives.

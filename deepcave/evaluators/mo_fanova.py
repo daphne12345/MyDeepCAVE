@@ -222,6 +222,26 @@ class fANOVAWeighted(fANOVA):
         super().__init__(run)
         self.n_trees = 100
 
+    def get_weightings(self, objectives_normed, df):
+        """
+        Returns the weighting used for the weighted importance. It uses the points on the pareto-front as weightings
+        :param objectives_normed: the normalized objective names as a list of strings
+        :param df: dataframe containing the encoded data
+        :return: the weightings as a list of lists
+        """
+        optimized = self.is_pareto_efficient(df[objectives_normed].to_numpy())
+        return df[optimized][objectives_normed].T.apply(lambda values: values / values.sum()).T.to_numpy()
+
+    def is_pareto_efficient(serlf, costs):
+        """
+        Find the pareto-efficient points
+        :param costs: An (n_points, n_costs) array
+        :return: A (n_points, ) boolean array, indicating whether each point is Pareto efficient
+        """
+        is_efficient = np.ones(costs.shape[0], dtype=bool)
+        for i, c in enumerate(costs):
+            is_efficient[i] = np.all(np.any(costs[:i] > c, axis=1)) and np.all(np.any(costs[i + 1:] > c, axis=1))
+        return is_efficient
 
 
     def calculate(
@@ -271,12 +291,19 @@ class fANOVAWeighted(fANOVA):
         )
         X = df[self.hp_names].to_numpy()
 
-        # TODO calculate weightings from run
-        #TODO calculate normed objectives
+        # normalize objectives
+        objectives_normed = list()
+        for obj in objectives:
+            normed = obj.name + '_normed'
+            df[normed] = (df[obj.name] - df[obj.name].min()) / (df[obj.name].max() - df[obj.name].min())
+            objectives_normed.append(normed)
+
         # TODO return df_all somwhow
         # TODO create MO plot instead of single objective
+        df_all = pd.DataFrame([])
+        weightings = self.get_weightings(objectives_normed, df)
         for w in weightings:
-            Y = sum(df[obj] * weighting for obj, weighting in zip(objectives_normed, weighting)).to_numpy()
+            Y = sum(df[obj] * weighting for obj, weighting in zip(objectives_normed, w)).to_numpy()
 
             self._model = FanovaForest(self.cs, n_trees=n_trees, seed=seed)
             self._model.train(X, Y)

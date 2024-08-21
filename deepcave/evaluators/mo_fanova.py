@@ -19,6 +19,7 @@ import numpy as np
 
 from deepcave.constants import COMBINED_COST_NAME
 from deepcave.evaluators.epm.fanova_forest import FanovaForest
+from deepcave.evaluators import fANOVA
 from deepcave.runs import AbstractRun
 from deepcave.runs.objective import Objective
 from deepcave.utils.logs import get_logger

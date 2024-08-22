@@ -581,6 +581,7 @@ class Importances(StaticPlugin):
         figure = go.Figure()
         df = pd.DataFrame(data, columns=['x', 'y', 'error_y', 'hp_name'])
         df = df[df['hp_name'].isin(idx)] # only keep selected hps
+        print(df)
 
         # Group by 'hp_name' and plot each group
         for group_id, group_data in df.groupby('hp_name'):

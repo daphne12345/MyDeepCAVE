@@ -114,7 +114,6 @@ class MOfANOVA(fANOVA):
             df[normed] = (df[obj.name] - df[obj.name].min()) / (df[obj.name].max() - df[obj.name].min())
             objectives_normed.append(normed)
 
-        # TODO create MO plot instead of single objective
         df_all = pd.DataFrame([])
         weightings = self.get_weightings(objectives_normed, df)
         for w in weightings:
@@ -122,7 +121,7 @@ class MOfANOVA(fANOVA):
 
             self._model = FanovaForest(self.cs, n_trees=n_trees, seed=seed)
             self._model.train(X, Y)
-            df_res = pd.DataFrame(self._model.get_importances(hp_names=None)).loc[0:1].T.reset_index()
+            df_res = pd.DataFrame(self.get_importances(hp_names=None)).loc[0:1].T.reset_index()
             df_res['weight_for_' + objectives_normed[0]] = w[0]
             df_all = pd.concat([df_all, df_res])
         df_all = df_all.rename(columns={0: 'fanova', 1: 'variance', 'index': 'hp_name'})

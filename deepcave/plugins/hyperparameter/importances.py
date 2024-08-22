@@ -567,7 +567,9 @@ class Importances(StaticPlugin):
         # Sort by last fidelity now
         selected_budget_id = max(selected_budget_ids)
         idx = data[selected_budget_id].groupby("hp_name")['importance'].max().sort_values(ascending=False)
+        print(idx)
         idx = idx[:n_hps]
+        print(idx)
 
         # colors = {label: color for label, color in zip(hps, sns.color_palette('colorblind', n_colors=len(hps)))}
 

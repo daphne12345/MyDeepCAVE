@@ -362,7 +362,6 @@ class Importances(StaticPlugin):
             # Initialize the evaluator
             evaluator = LocalEvaluator(run)
         elif method == "global" and isinstance(objective,list):
-            print('here')
             evaluator = MOfANOVA(run)
         elif method == "global":
             evaluator = GlobalEvaluator(run)
@@ -376,9 +375,12 @@ class Importances(StaticPlugin):
             evaluator.calculate(objective, budget, n_trees=n_trees, seed=0)
 
             importances = evaluator.get_importances(hp_names)
-            print(importances)
-            if any(np.isnan(val) for value in importances.values() for val in value):
-                logger.warning(f"Nan encountered in importance values for budget {budget}.")
+            if isinstance(objective, list):
+                if any(importances['hp_name'].isna()):
+                    logger.warning(f"Nan encountered in importance values for budget {budget}.")
+            else:
+                if any(np.isnan(val) for value in importances.values() for val in value):
+                    logger.warning(f"Nan encountered in importance values for budget {budget}.")
             data[budget_id] = importances
 
         return data  # type: ignore
@@ -553,15 +555,15 @@ class Importances(StaticPlugin):
 
         # Collect data
         data = {}
-        for budget_id, importances in outputs.items():
-            print(importances)
+        for budget_id, df_importances in outputs.items():
+            print(df_importances)
             # Important to cast budget_id here because of json serialization
             budget_id = int(budget_id)
             if budget_id not in selected_budget_ids:
                 continue
 
-            if importances.key() in selected_hp_names:  # only keep selected hps
-                data[budget_id] = importances
+            df_importances = df_importances[df_importances['hp_name'].isin(selected_hp_names)]  # only keep selected hps
+            data[budget_id] = df_importances
 
 
         # Sort by last fidelity now

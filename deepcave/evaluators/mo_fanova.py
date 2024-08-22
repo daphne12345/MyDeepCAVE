@@ -161,8 +161,9 @@ class MOfANOVA(fANOVA):
             If there is zero total variance in all trees.
         """
         if hp_names:
-            return self.importances_[self.importances_['hp_name'].isin(hp_names)].sort_values(by='weight_for_1-accuracy_normed').groupby('hp_name').agg(list).T.to_dict('list') # Dict[hp_name: [importances->list, variances->list, weightings->list]]
+            return self.importances_[self.importances_['hp_name'].isin(hp_names)]
         else:
-            return self.importances_.sort_values(by='weight_for_1-accuracy_normed').groupby('hp_name').agg(list).T.to_dict('list') # Dict[hp_name: [importances->list, variances->list, weightings->list]]
+            return self.importances_
+        # .sort_values(by='weight_for_1-accuracy_normed').groupby('hp_name').agg(list).T.to_dict('list') # Dict[hp_name: [importances->list, variances->list, weightings->list]]
 
 

@@ -550,6 +550,7 @@ class Importances(StaticPlugin):
         # Collect data
         data = {}
         for budget_id, importances in outputs.items():
+            print(importances)
             # Important to cast budget_id here because of json serialization
             budget_id = int(budget_id)
             if budget_id not in selected_budget_ids:
@@ -579,9 +580,9 @@ class Importances(StaticPlugin):
 
         # Create the figure
         figure = go.Figure()
-        print(pd.DataFrame(data))
+        # print(pd.DataFrame(data))
         df = pd.DataFrame(data, columns=['x', 'y', 'error_y', 'hp_name'])
-        print(df)
+        # print(df)
         df = df[df['hp_name'].isin(idx)] # only keep selected hps
 
         # Group by 'hp_name' and plot each group

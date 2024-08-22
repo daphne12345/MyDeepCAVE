@@ -376,7 +376,6 @@ class Importances(StaticPlugin):
 
             importances = evaluator.get_importances(hp_names)
             if isinstance(objective, list):
-                print()
                 if any(pd.read_json(importances)['hp_name'].isna()):
                     logger.warning(f"Nan encountered in importance values for budget {budget}.")
             else:
@@ -552,13 +551,10 @@ class Importances(StaticPlugin):
         if len(selected_hp_names) == 0 or len(selected_budget_ids) == 0:
             raise PreventUpdate()
 
-        print(outputs)
-
         # Collect data
         data = {}
         for budget_id, importances_json in outputs.items():
             df_importances = pd.read_json(importances_json)
-            print(df_importances)
             # Important to cast budget_id here because of json serialization
             budget_id = int(budget_id)
             if budget_id not in selected_budget_ids:
@@ -585,6 +581,7 @@ class Importances(StaticPlugin):
         for group_id, group_data in df.groupby('hp_name'):
             # Sort data by the weight column
             group_data = group_data.sort_values(by='weight')
+            print(group_data)
 
             # Add the line plot
             figure.add_trace(go.Scatter(

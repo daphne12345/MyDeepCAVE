@@ -376,6 +376,7 @@ class Importances(StaticPlugin):
             evaluator.calculate(objective, budget, n_trees=n_trees, seed=0)
 
             importances = evaluator.get_importances(hp_names)
+            print(importances)
             if any(np.isnan(val) for value in importances.values() for val in value):
                 logger.warning(f"Nan encountered in importance values for budget {budget}.")
             data[budget_id] = importances

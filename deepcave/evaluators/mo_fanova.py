@@ -124,6 +124,7 @@ class MOfANOVA(fANOVA):
             df_res = pd.DataFrame(self.get_importances(hp_names=None)).loc[0:1].T.reset_index()
             df_res['weight_for_' + objectives_normed[0]] = w[0]
             df_all = pd.concat([df_all, df_res])
-        df_all = df_all.rename(columns={0: 'fanova', 1: 'variance', 'index': 'hp_name'})
-        importances_ = df_all.sort_values(by='weight_for_1-accuracy_normed').groupby('hp_name').agg(list).T.to_dict('list') # Dict[hp_name: [importances->list, variances->list, weightings->list]]
-        return importances_
+        df_all = df_all.rename(columns={0: 'importance', 1: 'variance', 'index': 'hp_name'})
+        # importances_ = df_all.sort_values(by='weight_for_1-accuracy_normed').groupby('hp_name').agg(list).T.to_dict('list') # Dict[hp_name: [importances->list, variances->list, weightings->list]]
+        # return importances_
+        return df_all

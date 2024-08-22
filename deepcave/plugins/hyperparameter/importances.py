@@ -549,41 +549,28 @@ class Importances(StaticPlugin):
 
         # Collect data
         data = {}
-        for budget_id, importances in outputs.items():
-            print(importances)
+        for budget_id, df_importances in outputs.items():
+            print(df_importances)
             # Important to cast budget_id here because of json serialization
             budget_id = int(budget_id)
             if budget_id not in selected_budget_ids:
                 continue
 
-            x = []
-            y = []
-            error_y = []
-            hp_names = []
-            for hp_name, results in importances.items():
-                if hp_name not in selected_hp_names:
-                    continue
+            df_importances = df_importances[df_importances['hp_name'].isin(selected_hp_names)]  # only keep selected hps
+            data[budget_id] = df_importances
 
-                x += [results[2]] #x is the weight of the objective
-                y += [results[0]]
-                error_y += [results[1]]
-                hp_names += hp_name
-
-            data[budget_id] = (np.array(x), np.array(y), np.array(error_y), hp_names)
 
         # Sort by last fidelity now
         selected_budget_id = max(selected_budget_ids)
-        idx = np.argsort(data[selected_budget_id][3], axis=None)[::-1]
+        idx = data[selected_budget_id].groupby("hp_name")['importances'].max().sort_values(ascending=False)
         idx = idx[:n_hps]
 
         # colors = {label: color for label, color in zip(hps, sns.color_palette('colorblind', n_colors=len(hps)))}
 
         # Create the figure
         figure = go.Figure()
-        # print(pd.DataFrame(data))
-        df = pd.DataFrame(data, columns=['x', 'y', 'error_y', 'hp_name'])
         # print(df)
-        df = df[df['hp_name'].isin(idx)] # only keep selected hps
+        df = data[selected_budget_id][data[selected_budget_id]['hp_name'].isin(idx)] # only keep selected hps
 
         # Group by 'hp_name' and plot each group
         for group_id, group_data in df.groupby('hp_name'):

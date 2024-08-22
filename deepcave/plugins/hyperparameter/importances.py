@@ -575,7 +575,9 @@ class Importances(StaticPlugin):
         figure = go.Figure()
         # print(df)
         df = data[selected_budget_id][data[selected_budget_id]['hp_name'].isin(idx)] # only keep selected hps
-        df = df.apply(pd.to_numeric, errors='ignore')
+        df['weight'] = df['weight'].to(float)
+        df['importance'] = df['importance'].to(float)
+        df['variance'] = df['variance'].to(float)
         print(df)
 
         # Group by 'hp_name' and plot each group

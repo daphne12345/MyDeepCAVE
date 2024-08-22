@@ -430,7 +430,7 @@ class Importances(StaticPlugin):
         """
 
         if inputs["method"] == 'global' and inputs["objective_id2"] and inputs["objective_id2"]!=-1:
-            return load_ouputs_mo_fanova(run, inputs, outputs)
+            return Importances.load_ouputs_mo_fanova(inputs, outputs)
 
         # First selected, should always be shown first
         selected_hp_names = inputs["hyperparameter_names"]
@@ -509,7 +509,7 @@ class Importances(StaticPlugin):
         return figure
 
     @staticmethod
-    def load_ouputs_mo_fanova(run, inputs, outputs) -> go.Figure:  # type: ignore
+    def load_ouputs_mo_fanova(inputs, outputs) -> go.Figure:  # type: ignore
         """
         Read in raw data and prepare for layout.
 

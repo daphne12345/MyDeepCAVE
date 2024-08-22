@@ -548,6 +548,8 @@ class Importances(StaticPlugin):
         if len(selected_hp_names) == 0 or len(selected_budget_ids) == 0:
             raise PreventUpdate()
 
+        print(outputs)
+
         # Collect data
         data = {}
         for budget_id, df_importances in outputs.items():

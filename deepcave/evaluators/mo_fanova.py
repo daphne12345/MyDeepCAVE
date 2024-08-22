@@ -121,10 +121,45 @@ class MOfANOVA(fANOVA):
 
             self._model = FanovaForest(self.cs, n_trees=n_trees, seed=seed)
             self._model.train(X, Y)
-            df_res = pd.DataFrame(self.get_importances(hp_names=None)).loc[0:1].T.reset_index()
+            df_res = pd.DataFrame(super(MOfANOVA, self).get_importances(hp_names=None)).loc[0:1].T.reset_index()
             df_res['weight_for_' + objectives_normed[0]] = w[0]
             df_all = pd.concat([df_all, df_res])
-        importances_ = df_all.rename(columns={0: 'importance', 1: 'variance', 'index': 'hp_name'})
+        self.importances_ = df_all.rename(columns={0: 'importance', 1: 'variance', 'index': 'hp_name'})
         # importances_ = df_all.sort_values(by='weight_for_1-accuracy_normed').groupby('hp_name').agg(list).T.to_dict('list') # Dict[hp_name: [importances->list, variances->list, weightings->list]]
         # return importances_
-        return importances_
+
+
+    def get_importances(
+        self, hp_names: Optional[List[str]] = None, depth: int = 1, sort: bool = True
+    ) -> Dict[Union[str, Tuple[str, ...]], Tuple[float, float, float, float]]:
+        """
+        Return the importance scores from the passed Hyperparameter names.
+
+        Warning
+        -------
+        Using a depth higher than 1 might take much longer.
+
+        Parameters
+        ----------
+        hp_names : Optional[List[str]]
+            Selected Hyperparameter names to get the importance scores from. If None, all
+            Hyperparameters of the configuration space are used.
+        depth : int, optional
+            How often dimensions should be combined. By default 1.
+        sort : bool, optional
+            Whether the Hyperparameters should be sorted by importance. By default True.
+
+        Returns
+        -------
+        Dict[Union[str, Tuple[str, ...]], Tuple[float, float, float, float]]
+            Dictionary with Hyperparameter names and the corresponding importance scores.
+            The values are tuples of the form (mean individual, var individual, mean total,
+            var total). Note that individual and total are the same if depth is 1.
+
+        Raises
+        ------
+        RuntimeError
+            If there is zero total variance in all trees.
+        """
+        return self.importances_
+

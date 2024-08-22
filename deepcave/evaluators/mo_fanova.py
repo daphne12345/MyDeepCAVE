@@ -126,8 +126,6 @@ class MOfANOVA(fANOVA):
             df_res['weight_for_' + objectives_normed[0]] = w[0]
             df_all = pd.concat([df_all, df_res])
         self.importances_ = df_all.rename(columns={0: 'importance', 1: 'variance', 'index': 'hp_name'})
-        # importances_ = df_all.sort_values(by='weight_for_1-accuracy_normed').groupby('hp_name').agg(list).T.to_dict('list') # Dict[hp_name: [importances->list, variances->list, weightings->list]]
-        # return importances_
 
 
     def get_importances(
@@ -163,7 +161,8 @@ class MOfANOVA(fANOVA):
             If there is zero total variance in all trees.
         """
         if hp_names:
-            return self.importances_[self.importances_['hp_name'].isin(hp_names)]
+            return self.importances_[self.importances_['hp_name'].isin(hp_names)].sort_values(by='weight_for_1-accuracy_normed').groupby('hp_name').agg(list).T.to_dict('list') # Dict[hp_name: [importances->list, variances->list, weightings->list]]
         else:
-            return self.importances_
+            return self.importances_.sort_values(by='weight_for_1-accuracy_normed').groupby('hp_name').agg(list).T.to_dict('list') # Dict[hp_name: [importances->list, variances->list, weightings->list]]
+
 

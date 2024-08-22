@@ -552,15 +552,15 @@ class Importances(StaticPlugin):
 
         # Collect data
         data = {}
-        for budget_id, df_importances in outputs.items():
-            print(df_importances)
+        for budget_id, importances in outputs.items():
+            print(importances)
             # Important to cast budget_id here because of json serialization
             budget_id = int(budget_id)
             if budget_id not in selected_budget_ids:
                 continue
 
-            df_importances = df_importances[df_importances['hp_name'].isin(selected_hp_names)]  # only keep selected hps
-            data[budget_id] = df_importances
+            if importances.key() in selected_hp_names:  # only keep selected hps
+                data[budget_id] = importances
 
 
         # Sort by last fidelity now

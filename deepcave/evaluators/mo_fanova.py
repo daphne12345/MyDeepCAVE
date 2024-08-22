@@ -37,6 +37,7 @@ class MOfANOVA(fANOVA):
 
         super().__init__(run)
         self.n_trees = 100
+        self.importances_ = None
 
     def get_weightings(self, objectives_normed, df):
         """
@@ -161,6 +162,7 @@ class MOfANOVA(fANOVA):
         RuntimeError
             If there is zero total variance in all trees.
         """
+        print('here')
         if hp_names:
             return self.importances_[self.importances_['hp_names'].isin(hp_names)]
         else:

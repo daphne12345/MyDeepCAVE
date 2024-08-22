@@ -570,7 +570,7 @@ class Importances(StaticPlugin):
 
         # Sort by last fidelity now
         selected_budget_id = max(selected_budget_ids)
-        idx = data[selected_budget_id].groupby("hp_name")['importances'].max().sort_values(ascending=False)
+        idx = data[selected_budget_id].groupby("hp_name")['importance'].max().sort_values(ascending=False)
         idx = idx[:n_hps]
 
         # colors = {label: color for label, color in zip(hps, sns.color_palette('colorblind', n_colors=len(hps)))}
@@ -583,12 +583,12 @@ class Importances(StaticPlugin):
         # Group by 'hp_name' and plot each group
         for group_id, group_data in df.groupby('hp_name'):
             # Sort data by the weight column
-            group_data = group_data.sort_values(by='x')
+            group_data = group_data.sort_values(by='weight')
 
             # Add the line plot
             figure.add_trace(go.Scatter(
-                x=group_data['x'],
-                y=group_data['y'],
+                x=group_data['weight'],
+                y=group_data['importance'],
                 mode='lines',
                 name=group_id,
                 # line=dict(color=colors[group_id]),
@@ -596,9 +596,9 @@ class Importances(StaticPlugin):
 
             # Add the shaded area representing the variance
             figure.add_trace(go.Scatter(
-                x=group_data['x'].tolist() + group_data['x'][::-1].tolist(),
-                y=(group_data['fanova'] - group_data['error_y']).tolist() + (group_data['y'] + group_data[
-                    'error_y'])[::-1].tolist(),
+                x=group_data['weight'].tolist() + group_data['weight'][::-1].tolist(),
+                y=(group_data['importance'] - group_data['variance']).tolist() + (group_data['y'] + group_data[
+                    'variance'])[::-1].tolist(),
                 fill='toself',
                 # fillcolor=colors[group_id],
                 line=dict(color='rgba(255,255,255,0)'),
@@ -612,7 +612,7 @@ class Importances(StaticPlugin):
             xaxis_title='Weight for Error',
             yaxis_title='Importance',
             xaxis=dict(range=[0, 1],tickangle=-45),
-            yaxis=dict(range=[0, df['y'].max()]),
+            yaxis=dict(range=[0, df['importance'].max()]),
             title='MO-fANOVA',
             margin = config.FIGURE_MARGIN,
             font=dict(size=config.FIGURE_FONT_SIZE),

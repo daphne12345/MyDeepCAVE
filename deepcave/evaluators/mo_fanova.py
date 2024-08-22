@@ -123,7 +123,7 @@ class MOfANOVA(fANOVA):
             self._model = FanovaForest(self.cs, n_trees=n_trees, seed=seed)
             self._model.train(X, Y)
             df_res = pd.DataFrame(super(MOfANOVA, self).get_importances(hp_names=None)).loc[0:1].T.reset_index()
-            df_res['weight_for_' + objectives_normed[0]] = w[0]
+            df_res['weight'] = w[0]
             df_all = pd.concat([df_all, df_res])
         self.importances_ = df_all.rename(columns={0: 'importance', 1: 'variance', 'index': 'hp_name'}).reset_index(drop=True)
 

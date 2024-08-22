@@ -362,6 +362,7 @@ class Importances(StaticPlugin):
             # Initialize the evaluator
             evaluator = LocalEvaluator(run)
         elif method == "global" and isinstance(objective,list):
+            print('here')
             evaluator = MOfANOVA(run)
         elif method == "global":
             evaluator = GlobalEvaluator(run)
@@ -550,7 +551,7 @@ class Importances(StaticPlugin):
         # Collect data
         data = {}
         for budget_id, df_importances in outputs.items():
-            print(df_importances)
+            # print(df_importances)
             # Important to cast budget_id here because of json serialization
             budget_id = int(budget_id)
             if budget_id not in selected_budget_ids:

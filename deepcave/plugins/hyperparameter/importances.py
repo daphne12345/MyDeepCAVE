@@ -579,6 +579,7 @@ class Importances(StaticPlugin):
         figure = go.Figure()
         # print(df)
         df = data[selected_budget_id][data[selected_budget_id]['hp_name'].isin(idx)] # only keep selected hps
+        df = df.apply(pd.to_numeric, errors='ignore')
 
         # Group by 'hp_name' and plot each group
         for group_id, group_data in df.groupby('hp_name'):

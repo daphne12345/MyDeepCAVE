@@ -566,7 +566,7 @@ class Importances(StaticPlugin):
 
         # Sort by last fidelity now
         selected_budget_id = max(selected_budget_ids)
-        idx = data[selected_budget_id].groupby("hp_name")['importance'].max().sort_values(ascending=False)
+        idx = data[selected_budget_id].groupby("hp_name")['importance'].max().sort_values(ascending=False).index
         print(idx)
         idx = idx[:n_hps]
         print(idx)

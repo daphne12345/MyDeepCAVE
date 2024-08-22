@@ -32,6 +32,7 @@ from deepcave.utils.layout import get_checklist_options, get_select_options, hel
 from deepcave.utils.logs import get_logger
 from deepcave.utils.styled_plot import plt
 from deepcave.utils.styled_plotty import get_color, save_image
+import pandas as pd
 
 logger = get_logger(__name__)
 
@@ -427,6 +428,10 @@ class Importances(StaticPlugin):
         go.figure
             The figure of the importances.
         """
+
+        if inputs["method"] == 'global' and inputs["objective_id2"] and inputs["objective_id2"]!=-1:
+            return load_ouputs_mo_fanova(run, inputs, outputs)
+
         # First selected, should always be shown first
         selected_hp_names = inputs["hyperparameter_names"]
         selected_budget_ids = inputs["budget_ids"]
@@ -499,6 +504,122 @@ class Importances(StaticPlugin):
             xaxis=dict(tickangle=-45),
             font=dict(size=config.FIGURE_FONT_SIZE),
         )
+        save_image(figure, "importances.pdf")
+
+        return figure
+
+    @staticmethod
+    def load_ouputs_mo_fanova(run, inputs, outputs) -> go.Figure:  # type: ignore
+        """
+        Read in raw data and prepare for layout.
+
+        Note
+        ----
+        The passed inputs are cleaned and therefore differ
+        compared to 'load_inputs' or 'load_dependency_inputs'.
+        Please see '_clean_inputs' for more information.
+
+        Parameters
+        ----------
+        run
+            The selected run.
+        inputs
+            Input and filter values from the user.
+        outputs
+            Raw output from the run.
+
+        Returns
+        -------
+        go.figure
+            The figure of the importances.
+        """
+
+        # First selected, should always be shown first
+        selected_hp_names = inputs["hyperparameter_names"]
+        selected_budget_ids = inputs["budget_ids"]
+        n_hps = inputs["n_hps"]
+
+        if n_hps == "" or n_hps is None:
+            raise PreventUpdate
+        else:
+            n_hps = int(n_hps)
+
+        if len(selected_hp_names) == 0 or len(selected_budget_ids) == 0:
+            raise PreventUpdate()
+
+        # Collect data
+        data = {}
+        for budget_id, importances in outputs.items():
+            # Important to cast budget_id here because of json serialization
+            budget_id = int(budget_id)
+            if budget_id not in selected_budget_ids:
+                continue
+
+            x = []
+            y = []
+            error_y = []
+            hp_names = []
+            for hp_name, results in importances.items():
+                if hp_name not in selected_hp_names:
+                    continue
+
+                x += [results[2]] #x is the weight of the objective
+                y += [results[0]]
+                error_y += [results[1]]
+                hp_names += hp_name
+
+            data[budget_id] = (np.array(x), np.array(y), np.array(error_y), np.array(hp_names))
+
+        # Sort by last fidelity now
+        selected_budget_id = max(selected_budget_ids)
+        idx = np.argsort(data[selected_budget_id][3], axis=None)[::-1]
+        idx = idx[:n_hps]
+
+        # colors = {label: color for label, color in zip(hps, sns.color_palette('colorblind', n_colors=len(hps)))}
+
+        # Create the figure
+        figure = go.Figure()
+        df = pd.DataFrame(data, columns=['x', 'y', 'error_y', 'hp_name'])
+        df = df[df['hp_name'].isin(idx)] # only keep selected hps
+
+        # Group by 'hp_name' and plot each group
+        for group_id, group_data in df.groupby('hp_name'):
+            # Sort data by the weight column
+            group_data = group_data.sort_values(by='x')
+
+            # Add the line plot
+            figure.add_trace(go.Scatter(
+                x=group_data['x'],
+                y=group_data['y'],
+                mode='lines',
+                name=group_id,
+                # line=dict(color=colors[group_id]),
+            ))
+
+            # Add the shaded area representing the variance
+            figure.add_trace(go.Scatter(
+                x=group_data['x'].tolist() + group_data['x'][::-1].tolist(),
+                y=(group_data['fanova'] - group_data['error_y']).tolist() + (group_data['y'] + group_data[
+                    'error_y'])[::-1].tolist(),
+                fill='toself',
+                # fillcolor=colors[group_id],
+                line=dict(color='rgba(255,255,255,0)'),
+                hoverinfo='skip',
+                showlegend=False,
+                opacity=0.2,
+            ))
+
+        # Update the layout for labels, title, and axis limits
+        figure.update_layout(
+            xaxis_title='Weight for Error',
+            yaxis_title='Importance',
+            xaxis=dict(range=[0, 1],tickangle=-45),
+            yaxis=dict(range=[0, df['y'].max()]),
+            title='MO-fANOVA',
+            margin = config.FIGURE_MARGIN,
+            font=dict(size=config.FIGURE_FONT_SIZE),
+        )
+
         save_image(figure, "importances.pdf")
 
         return figure

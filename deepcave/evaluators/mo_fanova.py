@@ -114,7 +114,6 @@ class MOfANOVA(fANOVA):
             df[normed] = (df[obj.name] - df[obj.name].min()) / (df[obj.name].max() - df[obj.name].min())
             objectives_normed.append(normed)
 
-        # TODO return df_all somwhow
         # TODO create MO plot instead of single objective
         df_all = pd.DataFrame([])
         weightings = self.get_weightings(objectives_normed, df)
@@ -127,4 +126,5 @@ class MOfANOVA(fANOVA):
             df_res['weight_for_' + objectives_normed[0]] = w[0]
             df_all = pd.concat([df_all, df_res])
         df_all = df_all.rename(columns={0: 'fanova', 1: 'variance', 'index': 'hp_name'})
-
+        importances_ = df_all.sort_values(by='weight_for_1-accuracy_normed').groupby('hp_name').agg(list).T.to_dict('list') # Dict[hp_name: [importances->list, variances->list, weightings->list]]
+        return importances_

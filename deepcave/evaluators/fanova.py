@@ -201,8 +201,6 @@ class fANOVA:
                 hp_names_key = tuple(hp_names)
             importances_[hp_names_key] = values
 
-        print(importances_)
-
         return importances_
 
     '''

@@ -553,7 +553,7 @@ class Importances(StaticPlugin):
         # Collect data
         data = {}
         for budget_id, df_importances in outputs.items():
-            # print(df_importances)
+            print(df_importances)
             # Important to cast budget_id here because of json serialization
             budget_id = int(budget_id)
             if budget_id not in selected_budget_ids:

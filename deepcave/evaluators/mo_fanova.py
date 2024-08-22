@@ -161,5 +161,8 @@ class MOfANOVA(fANOVA):
         RuntimeError
             If there is zero total variance in all trees.
         """
-        return self.importances_
+        if hp_names:
+            return self.importances_[self.importances_['hp_names'].isin(hp_names)]
+        else:
+            return self.importances_
 

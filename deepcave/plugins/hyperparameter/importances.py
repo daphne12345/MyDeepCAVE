@@ -376,7 +376,8 @@ class Importances(StaticPlugin):
 
             importances = evaluator.get_importances(hp_names)
             if isinstance(objective, list):
-                if any(importances['hp_name'].isna()):
+                print()
+                if any(pd.DataFrame(importances)['hp_name'].isna()):
                     logger.warning(f"Nan encountered in importance values for budget {budget}.")
             else:
                 if any(np.isnan(val) for value in importances.values() for val in value):
@@ -555,7 +556,8 @@ class Importances(StaticPlugin):
 
         # Collect data
         data = {}
-        for budget_id, df_importances in outputs.items():
+        for budget_id, importances_json in outputs.items():
+            df_importances = pd.Dataframe(importances_json)
             print(df_importances)
             # Important to cast budget_id here because of json serialization
             budget_id = int(budget_id)

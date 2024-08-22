@@ -568,7 +568,7 @@ class Importances(StaticPlugin):
                 error_y += [results[1]]
                 hp_names += hp_name
 
-            data[budget_id] = (np.array(x), np.array(y), np.array(error_y), np.array(hp_names))
+            data[budget_id] = (np.array(x), np.array(y), np.array(error_y), hp_names)
 
         # Sort by last fidelity now
         selected_budget_id = max(selected_budget_ids)

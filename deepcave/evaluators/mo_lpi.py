@@ -13,9 +13,13 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from ConfigSpace import Configuration
-from ConfigSpace.c_util import change_hp_value, check_forbidden
+from ConfigSpace.c_util import change_hp_value
 from ConfigSpace.exceptions import ForbiddenValueError
-from ConfigSpace.hyperparameters import CategoricalHyperparameter
+from ConfigSpace.hyperparameters import (
+    CategoricalHyperparameter,
+    NumericalHyperparameter,
+)
+from ConfigSpace.types import Array, f64
 from ConfigSpace.util import impute_inactive_values
 
 from deepcave.constants import COMBINED_COST_NAME
@@ -59,11 +63,6 @@ class MOLPI(LPI):
 
     def __init__(self, run: AbstractRun):
         super().__init__(run)
-        # self.run = run
-        # self.cs = run.configspace
-        # self.hp_names = self.cs.get_hyperparameter_names()
-        # self.variances: Optional[Dict[Any, List[Any]]] = None
-        # self.importances: Optional[Dict[Any, Any]] = None
 
     def get_weightings(self, objectives_normed, df):
         """
@@ -200,7 +199,9 @@ class MOLPI(LPI):
 
                 # Create the neighbor-Configuration object
                 new_array = self.incumbent_array.copy()
-                new_array = change_hp_value(self.cs, new_array, hp_name, unit_neighbor, hp_idx)
+                new_array = change_hp_value(
+                    self.cs, new_array, hp_name, unit_neighbor, self.cs.index_of[hp_name]
+                )
                 new_config = impute_inactive_values(Configuration(self.cs, vector=new_array))
 
                 # Get the leaf values
@@ -305,7 +306,7 @@ class MOLPI(LPI):
         neighborhood : Dict[str, List[Union[np.ndarray, List[np.ndarray]]]]
             The neighborhood.
         """
-        hp_names = self.cs.get_hyperparameter_names()
+        hp_names = list(self.cs.keys())
 
         neighborhood: Dict[str, List[Union[np.ndarray, List[np.ndarray]]]] = {}
         for hp_idx, hp_name in enumerate(hp_names):
@@ -316,12 +317,15 @@ class MOLPI(LPI):
             hp_neighborhood = []
             checked_neighbors = []  # On unit cube
             checked_neighbors_non_unit_cube = []  # Not on unit cube
-            hp = self.cs.get_hyperparameter(hp_name)
+            hp = self.cs[hp_name]
             num_neighbors = hp.get_num_neighbors(self.incumbent[hp_name])
+
+            neighbors: Union[List[Union[f64]], Array[Union[f64]]]
 
             if num_neighbors == 0:
                 continue
             elif np.isinf(num_neighbors):
+                assert isinstance(hp, NumericalHyperparameter)
                 if hp.log:
                     base = np.e
                     log_lower = np.log(hp.lower) / np.log(base)
@@ -335,9 +339,9 @@ class MOLPI(LPI):
                     )
                 else:
                     neighbors_range = np.linspace(hp.lower, hp.upper, self.continous_neighbors)
-                neighbors = list(map(lambda x: hp._inverse_transform(x), neighbors_range))
+                neighbors = list(map(lambda x: hp.to_vector(x), neighbors_range))
             else:
-                neighbors = hp.get_neighbors(self.incumbent_array[hp_idx], self.rs)
+                neighbors = hp.neighbors_vectorized(self.incumbent_array[hp_idx], n=4, seed=self.rs)
 
             for neighbor in neighbors:
                 if neighbor in checked_neighbors:
@@ -349,8 +353,8 @@ class MOLPI(LPI):
                 try:
                     new_config = Configuration(self.cs, vector=new_array)
                     hp_neighborhood.append(new_config)
-                    new_config.is_valid_configuration()
-                    check_forbidden(self.cs.forbidden_clauses, new_array)
+                    new_config.check_valid_configuration()
+                    self.cs.check_configuration_vector_representation(new_array)
 
                     checked_neighbors.append(neighbor)
                     checked_neighbors_non_unit_cube.append(new_config[hp_name])
@@ -360,7 +364,7 @@ class MOLPI(LPI):
             sort_idx = list(
                 map(lambda x: x[0], sorted(enumerate(checked_neighbors), key=lambda y: y[1]))
             )
-            if isinstance(self.cs.get_hyperparameter(hp_name), CategoricalHyperparameter):
+            if isinstance(self.cs[hp_name], CategoricalHyperparameter):
                 checked_neighbors_non_unit_cube_categorical = list(
                     np.array(checked_neighbors_non_unit_cube)[sort_idx]
                 )

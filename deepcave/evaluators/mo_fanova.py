@@ -36,7 +36,6 @@ class MOfANOVA(fANOVA):
             raise RuntimeError("The run needs to be initialized.")
 
         super().__init__(run)
-        self.n_trees = 100
         self.importances_ = None
 
     def get_weightings(self, objectives_normed, df):
@@ -65,7 +64,7 @@ class MOfANOVA(fANOVA):
         self,
         objectives: Optional[Union[Objective, List[Objective]]] = None,
         budget: Optional[Union[int, float]] = None,
-        n_trees: int = 16,
+        n_trees: int = 100,
         seed: int = 0,
     ) -> None:
         """

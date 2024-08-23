@@ -152,12 +152,11 @@ class MOLPI(LPI):
             importances, variances = self.calc_one_weighting()
             # df_res = pd.DataFrame(importances).loc[0:1].T.reset_index()
             df_res = pd.concat([pd.Series(importances), pd.Series(variances)], axis=1).reset_index()
-            df_res = df_res.explode(column=[0,1])
+            df_res = df_res.rename(columns={0: 'importance', 1: 'variance', 'index':'hp_name'}).explode(column=['importance', 'variance'])
             print(df_res)
             df_res['weight'] = w[0]
             df_all = pd.concat([df_all, df_res])
-        self.importances = df_all.rename(columns={0: 'importance', 1: 'variance', 'index': 'hp_name'}).reset_index(
-            drop=True)
+        self.importances = df_all.reset_index(drop=True)
 
     def calc_one_weighting(self):
         # Get neighborhood sampled on an unit-hypercube.

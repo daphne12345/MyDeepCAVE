@@ -157,6 +157,7 @@ class MOLPI(LPI):
             df_res['weight'] = w[0]
             df_all = pd.concat([df_all, df_res])
         self.importances = df_all.rename(columns={0: 'importance', 1: 'variance', 'index':'hp_name'}).reset_index(drop=True)
+        self.importances = self.importances.applymap(lambda x: max(x, 0)) #no negative values
         print(self.importances)
 
     def calc_one_weighting(self):

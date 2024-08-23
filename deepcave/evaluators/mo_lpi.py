@@ -75,7 +75,7 @@ class MOLPI(LPI):
         optimized = self.is_pareto_efficient(df[objectives_normed].to_numpy())
         return df[optimized][objectives_normed].T.apply(lambda values: values / values.sum()).T.to_numpy()
 
-    def is_pareto_efficient(serlf, costs):
+    def is_pareto_efficient(self, costs):
         """
         Find the pareto-efficient points
         :param costs: An (n_points, n_costs) array
@@ -149,14 +149,15 @@ class MOLPI(LPI):
             # Use same forest as for fanova
             self._model = FanovaForest(self.cs, n_trees=n_trees, seed=seed)
             self._model.train(X, Y)
-            importances, variances = self.calc_one_weighting()
+            importances = self.calc_one_weighting()
+            print(importances)
             # df_res = pd.DataFrame(importances).loc[0:1].T.reset_index()
-            df_res = pd.concat([pd.Series(importances), pd.Series(variances)], axis=1).reset_index()
-            df_res = df_res.rename(columns={0: 'importance', 1: 'variance', 'index':'hp_name'}).explode(column=['importance', 'variance'])
+            df_res = pd.DataFrame(importances).reset_index()
             print(df_res)
             df_res['weight'] = w[0]
             df_all = pd.concat([df_all, df_res])
-        self.importances = df_all.reset_index(drop=True)
+        self.importances = df_all.rename(columns={0: 'importance', 1: 'variance', 'index':'hp_name'}).reset_index(drop=True)
+        print(self.importances)
 
     def calc_one_weighting(self):
         # Get neighborhood sampled on an unit-hypercube.
@@ -174,7 +175,7 @@ class MOLPI(LPI):
         # These are used for importance and hold the corresponding importance/variance over
         # neighbors. Only import if NOT quantifying importance via performance-variance across
         # neighbors.
-        importances = {}
+        # importances = {}
         # Nested list of values per tree in random forest.
         predictions: Dict[str, List[List[np.ndarray]]] = {}
 
@@ -242,7 +243,7 @@ class MOLPI(LPI):
             imp_over_median = (np.median(tmp_perf) - performances[hp_name][incumbent_idx]) / delta
             imp_over_max = (np.max(tmp_perf) - performances[hp_name][incumbent_idx]) / delta
 
-            importances[hp_name] = np.array([imp_over_mean, imp_over_median, imp_over_max])
+            # importances[hp_name] = np.array([imp_over_mean, imp_over_median, imp_over_max])
 
         # Creating actual importance value (by normalizing over sum of vars)
         num_trees = len(list(predictions.values())[0][0])
@@ -271,7 +272,8 @@ class MOLPI(LPI):
             ]
             for p, trees in overall_var_per_tree.items()
         }
-        return importances, overall_var_per_tree
+        imp_var_dict = { k:(np.mean(overall_var_per_tree[k]), np.var(overall_var_per_tree[k])) for k in overall_var_per_tree}
+        return  imp_var_dict
 
     def get_importances(self, hp_names: List[str]) -> Dict[str, Tuple[float, float]]:
         """
@@ -292,30 +294,13 @@ class MOLPI(LPI):
         RuntimeError
             If the important scores are not calculated.
         """
-        if self.importances is None or self.variances is None:
+        if self.importances is None:
             raise RuntimeError("Importance scores must be calculated first.")
 
-        importances: Dict[str, Tuple[float, float]] = {}
-        for hp_name in hp_names:
-            mean = 0
-            std = 0
-
-            if hp_name in self.importances:
-                mean = np.mean(self.variances[hp_name])
-                std = np.var(self.variances[hp_name])
-
-            # Use this to quantify importance via importance over mean value (not normalized to 1)
-            # mean = self.importances[hp_name][0]
-
-            # Sometimes there is an ugly effect if default is better than
-            # incumbent.
-            if mean < 0:
-                mean = 0
-                std = 0
-
-            importances[hp_name] = (mean, std)
-
-        return importances
+        if hp_names:
+            return self.importances[self.importances['hp_name'].isin(hp_names)].to_json()
+        else:
+            return self.importances.to_json()
 
     def _get_neighborhood(self) -> Dict[str, List[Union[np.ndarray, List[np.ndarray]]]]:
         """

@@ -151,9 +151,9 @@ class MOLPI(LPI):
             self._model.train(X, Y)
             importances, variances = self.calc_one_weighting()
             # df_res = pd.DataFrame(importances).loc[0:1].T.reset_index()
-            df_res = pd.merge([pd.Series(importances), pd.Series(variances)]).reset_index()
+            df_res = pd.concat([pd.Series(importances), pd.Series(variances)], axis=1).reset_index()
             print(df_res)
-            df_res = df_res.reame(columns={0: 'importance', 1: 'variance', 2:'hp_name'})
+            df_res = df_res.reame(columns={0: 'importance', 1: 'variance', 'index':'hp_name'})
             print(df_res)
             df_res['weight'] = w[0]
             df_all = pd.concat([df_all, df_res])

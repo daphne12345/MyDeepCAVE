@@ -152,7 +152,8 @@ class MOLPI(LPI):
             importances = self.calc_one_weighting()
             print(importances)
             # df_res = pd.DataFrame(importances).loc[0:1].T.reset_index()
-            df_res = pd.DataFrame(importances).reset_index()
+            print(pd.DataFrame(importances))
+            df_res = pd.DataFrame(importances).loc[0:1].T.reset_index()
             print(df_res)
             df_res['weight'] = w[0]
             df_all = pd.concat([df_all, df_res])

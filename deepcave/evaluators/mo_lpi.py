@@ -1,0 +1,404 @@
+# TODO
+#  noqa: D400
+"""
+# LPI
+
+This module provides utilities to calculate the local parameter importance (LPI).
+
+## Classes
+    - LPI: This class calculates the local parameter importance (LPI).
+"""
+
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
+from ConfigSpace import Configuration
+from ConfigSpace.c_util import change_hp_value, check_forbidden
+from ConfigSpace.exceptions import ForbiddenValueError
+from ConfigSpace.hyperparameters import CategoricalHyperparameter
+from ConfigSpace.util import impute_inactive_values
+
+from deepcave.constants import COMBINED_COST_NAME
+from deepcave.evaluators.epm.fanova_forest import FanovaForest
+from deepcave.runs import AbstractRun
+from deepcave.runs.objective import Objective
+from deepcave.evaluators.lpi import LPI
+import pandas as pd
+
+
+# https://github.com/automl/ParameterImportance/blob/f4950593ee627093fc30c0847acc5d8bf63ef84b/pimp/evaluator/local_parameter_importance.py#L27
+class MOLPI(LPI):
+    """
+    Calculate the local parameter importance (LPI).
+
+    Properties
+    ----------
+    run : AbstractRun
+        The AbstractRun to get the importance from.
+    cs : ConfigurationSpace
+        The configuration space of the run.
+    hp_names : List[str]
+        The names of the Hyperparameters.
+    variances : Dict[Any, list]
+        The overall variances per tree.
+    importances : dict
+        The importances of the Hyperparameters.
+    continuous_neighbors : int
+        The number of neighbors chosen for continuous Hyperparameters.
+    incumbent : Configuration
+        The incumbent of the run.
+    default : Configuration
+        A configuration containing Hyperparameters with default values.
+    incumbent_array : numpy.ndarray
+        The internal vector representation of the incumbent.
+    seed : int
+        The seed. If not provided it will be random.
+    rs : RandomState
+        A random state with a given seed value.
+    """
+
+    def __init__(self, run: AbstractRun):
+        super().__init__(run)
+        # self.run = run
+        # self.cs = run.configspace
+        # self.hp_names = self.cs.get_hyperparameter_names()
+        # self.variances: Optional[Dict[Any, List[Any]]] = None
+        # self.importances: Optional[Dict[Any, Any]] = None
+
+    def get_weightings(self, objectives_normed, df):
+        """
+        Returns the weighting used for the weighted importance. It uses the points on the pareto-front as weightings
+        :param objectives_normed: the normalized objective names as a list of strings
+        :param df: dataframe containing the encoded data
+        :return: the weightings as a list of lists
+        """
+        optimized = self.is_pareto_efficient(df[objectives_normed].to_numpy())
+        return df[optimized][objectives_normed].T.apply(lambda values: values / values.sum()).T.to_numpy()
+
+    def is_pareto_efficient(self, costs):
+        """
+        Find the pareto-efficient points
+        :param costs: An (n_points, n_costs) array
+        :return: A (n_points, ) boolean array, indicating whether each point is Pareto efficient
+        """
+        is_efficient = np.ones(costs.shape[0], dtype=bool)
+        for i, c in enumerate(costs):
+            is_efficient[i] = np.all(np.any(costs[:i] > c, axis=1)) and np.all(np.any(costs[i + 1:] > c, axis=1))
+        return is_efficient
+
+    def calculate(
+        self,
+        objectives: Optional[Union[Objective, List[Objective]]] = None,
+        budget: Optional[Union[int, float]] = None,
+        continous_neighbors: int = 500,
+        n_trees: int = 10,
+        seed: int = 0,
+    ) -> None:
+        """
+        Prepare the data and train a RandomForest model.
+
+        Parameters
+        ----------
+        objectives : Optional[Union[Objective, List[Objective]]], optional
+            Considered objectives. By default, None. If None, all objectives are considered.
+        budget : Optional[Union[int, float]], optional
+            Considered budget. By default, None. If None, the highest budget is chosen.
+        continuous_neighbors : int, optional
+            How many neighbors should be chosen for continuous hyperparameters (HPs).
+            By default, 500.
+        n_trees : int, optional
+            The number of trees for the fanova forest.
+            Default is 10.
+        seed : Optional[int], optional
+            The seed. By default None. If None, a random seed is chosen.
+        """
+        if objectives is None:
+            objectives = self.run.get_objectives()
+
+        if budget is None:
+            budget = self.run.get_highest_budget()
+
+        # Set variables
+        self.continous_neighbors = continous_neighbors
+        self.incumbent, _ = self.run.get_incumbent(budget=budget, objectives=objectives)
+        self.default = self.cs.get_default_configuration()
+        self.incumbent_array = self.incumbent.get_array()
+
+        self.seed = seed
+        self.rs = np.random.RandomState(seed)
+
+        # Get data
+        df = self.run.get_encoded_data(
+            objectives=objectives, budget=budget, specific=True, include_combined_cost=True
+        )
+        X = df[self.hp_names].to_numpy()
+
+        # normalize objectives
+        objectives_normed = list()
+        for obj in objectives:
+            normed = obj.name + '_normed'
+            df[normed] = (df[obj.name] - df[obj.name].min()) / (df[obj.name].max() - df[obj.name].min())
+            objectives_normed.append(normed)
+
+        df_all = pd.DataFrame([])
+        weightings = self.get_weightings(objectives_normed, df)
+
+        for w in weightings:
+            Y = sum(df[obj] * weighting for obj, weighting in zip(objectives_normed, w)).to_numpy()
+            # Get model and train it
+            # Use same forest as for fanova
+            self._model = FanovaForest(self.cs, n_trees=n_trees, seed=seed)
+            self._model.train(X, Y)
+            importances = self.calc_one_weighting()
+            df_res = pd.DataFrame(importances).loc[0:1].T.reset_index()
+            df_res['weight'] = w[0]
+            df_all = pd.concat([df_all, df_res])
+        self.importances = df_all.rename(columns={0: 'importance', 1: 'variance', 'index':'hp_name'}).reset_index(drop=True)
+        self.importances = self.importances.applymap(lambda x: max(x, 0) if not isinstance(x, str) else x) #no negative values
+
+    def calc_one_weighting(self):
+        # Get neighborhood sampled on an unit-hypercube.
+        neighborhood = self._get_neighborhood()
+
+        # The delta performance is needed from the default configuration and the incumbent
+        def_perf, def_var = self._predict_mean_var(self.default)
+        inc_perf, inc_var = self._predict_mean_var(self.incumbent)
+        delta = def_perf - inc_perf
+
+        # These are used for plotting and hold the predictions for each neighbor of each parameter.
+        # That means performances holds the mean, variances the variance of the forest.
+        performances: Dict[str, List[np.ndarray]] = {}
+        variances: Dict[str, List[np.ndarray]] = {}
+        # These are used for importance and hold the corresponding importance/variance over
+        # neighbors. Only import if NOT quantifying importance via performance-variance across
+        # neighbors.
+        # importances = {}
+        # Nested list of values per tree in random forest.
+        predictions: Dict[str, List[List[np.ndarray]]] = {}
+
+        # Iterate over parameters
+        for hp_idx, hp_name in enumerate(self.incumbent.keys()):
+            if hp_name not in neighborhood:
+                continue
+
+            performances[hp_name] = []
+            variances[hp_name] = []
+            predictions[hp_name] = []
+            incumbent_added = False
+            incumbent_idx = 0
+
+            # Iterate over neighbors
+            for unit_neighbor, neighbor in zip(neighborhood[hp_name][0], neighborhood[hp_name][1]):
+                if not incumbent_added:
+                    # Detect incumbent
+                    if unit_neighbor > self.incumbent_array[hp_idx]:
+                        performances[hp_name].append(inc_perf)
+                        variances[hp_name].append(inc_var)
+                        incumbent_added = True
+                    else:
+                        incumbent_idx += 1
+
+                # Create the neighbor-Configuration object
+                new_array = self.incumbent_array.copy()
+                new_array = change_hp_value(self.cs, new_array, hp_name, unit_neighbor, hp_idx)
+                new_config = impute_inactive_values(Configuration(self.cs, vector=new_array))
+
+                # Get the leaf values
+                x = np.array(new_config.get_array())
+                leaf_values = self._model.get_leaf_values(x)
+
+                # And the prediction/performance/variance
+                predictions[hp_name].append([np.mean(tree_pred) for tree_pred in leaf_values])
+                performances[hp_name].append(np.mean(predictions[hp_name][-1]))
+                variances[hp_name].append(np.var(predictions[hp_name][-1]))
+
+            if len(neighborhood[hp_name][0]) > 0:
+                neighborhood[hp_name][0] = np.insert(
+                    neighborhood[hp_name][0], incumbent_idx, self.incumbent_array[hp_idx]
+                )
+                neighborhood[hp_name][1] = np.insert(
+                    neighborhood[hp_name][1], incumbent_idx, self.incumbent[hp_name]
+                )
+            else:
+                neighborhood[hp_name][0] = np.array(self.incumbent_array[hp_idx])
+                neighborhood[hp_name][1] = [self.incumbent[hp_name]]
+
+            if not incumbent_added:
+                performances[hp_name].append(inc_perf)
+                variances[hp_name].append(inc_var)
+
+            # After all neighbors are estimated, look at all performances except the incumbent
+            perf_before = performances[hp_name][:incumbent_idx]
+            perf_after = performances[hp_name][incumbent_idx + 1 :]
+            tmp_perf = perf_before + perf_after
+
+            # Avoid division by zero
+            if delta == 0:
+                delta = 1
+
+        # Creating actual importance value (by normalizing over sum of vars)
+        num_trees = len(list(predictions.values())[0][0])
+        hp_names = list(performances.keys())
+
+        overall_var_per_tree = {}
+        for hp_name in hp_names:
+            hp_variances = []
+            for tree_idx in range(num_trees):
+                variance = np.var([neighbor[tree_idx] for neighbor in predictions[hp_name]])
+                hp_variances += [variance]
+
+            overall_var_per_tree[hp_name] = hp_variances
+
+        # Sum up variances per tree across parameters
+        sum_var_per_tree = [
+            sum([overall_var_per_tree[hp_name][tree_idx] for hp_name in hp_names])
+            for tree_idx in range(num_trees)
+        ]
+
+        # Normalize
+        overall_var_per_tree = {
+            p: [
+                t / sum_var_per_tree[idx] if sum_var_per_tree[idx] != 0.0 else np.nan
+                for idx, t in enumerate(trees)
+            ]
+            for p, trees in overall_var_per_tree.items()
+        }
+        imp_var_dict = { k:(np.mean(overall_var_per_tree[k]), np.var(overall_var_per_tree[k])) for k in overall_var_per_tree}
+        return  imp_var_dict
+
+    def get_importances(self, hp_names: List[str]) -> Dict[str, Tuple[float, float]]:
+        """
+        Return the importances.
+
+        Parameters
+        ----------
+        hp_names : List[str]
+            Selected Hyperparameter names to get the importance scores from.
+
+        Returns
+        -------
+        importances : Dict[str, Tuple[float, float]]
+            Hyperparameter name and mean+var importance.
+
+        Raises
+        ------
+        RuntimeError
+            If the important scores are not calculated.
+        """
+        if self.importances is None:
+            raise RuntimeError("Importance scores must be calculated first.")
+
+        if hp_names:
+            return self.importances[self.importances['hp_name'].isin(hp_names)].to_json()
+        else:
+            return self.importances.to_json()
+
+    def _get_neighborhood(self) -> Dict[str, List[Union[np.ndarray, List[np.ndarray]]]]:
+        """
+        Slight modification of ConfigSpace's get_one_exchange neighborhood.
+
+        This orders the parameter values and samples more neighbors in one go.
+        Further each and every neighbor needs to be rigorously checked if it is forbidden or not.
+
+        Returns
+        -------
+        neighborhood : Dict[str, List[Union[np.ndarray, List[np.ndarray]]]]
+            The neighborhood.
+        """
+        hp_names = self.cs.get_hyperparameter_names()
+
+        neighborhood: Dict[str, List[Union[np.ndarray, List[np.ndarray]]]] = {}
+        for hp_idx, hp_name in enumerate(hp_names):
+            # Check if hyperparameter is active
+            if not np.isfinite(self.incumbent_array[hp_idx]):
+                continue
+
+            hp_neighborhood = []
+            checked_neighbors = []  # On unit cube
+            checked_neighbors_non_unit_cube = []  # Not on unit cube
+            hp = self.cs.get_hyperparameter(hp_name)
+            num_neighbors = hp.get_num_neighbors(self.incumbent[hp_name])
+
+            if num_neighbors == 0:
+                continue
+            elif np.isinf(num_neighbors):
+                if hp.log:
+                    base = np.e
+                    log_lower = np.log(hp.lower) / np.log(base)
+                    log_upper = np.log(hp.upper) / np.log(base)
+                    neighbors_range = np.logspace(
+                        start=log_lower,
+                        stop=log_upper,
+                        num=self.continous_neighbors,
+                        endpoint=True,
+                        base=base,
+                    )
+                else:
+                    neighbors_range = np.linspace(hp.lower, hp.upper, self.continous_neighbors)
+                neighbors = list(map(lambda x: hp._inverse_transform(x), neighbors_range))
+            else:
+                neighbors = hp.get_neighbors(self.incumbent_array[hp_idx], self.rs)
+
+            for neighbor in neighbors:
+                if neighbor in checked_neighbors:
+                    continue
+
+                new_array = self.incumbent_array.copy()
+                new_array = change_hp_value(self.cs, new_array, hp_name, neighbor, hp_idx)
+
+                try:
+                    new_config = Configuration(self.cs, vector=new_array)
+                    hp_neighborhood.append(new_config)
+                    new_config.is_valid_configuration()
+                    check_forbidden(self.cs.forbidden_clauses, new_array)
+
+                    checked_neighbors.append(neighbor)
+                    checked_neighbors_non_unit_cube.append(new_config[hp_name])
+                except (ForbiddenValueError, ValueError):
+                    pass
+
+            sort_idx = list(
+                map(lambda x: x[0], sorted(enumerate(checked_neighbors), key=lambda y: y[1]))
+            )
+            if isinstance(self.cs.get_hyperparameter(hp_name), CategoricalHyperparameter):
+                checked_neighbors_non_unit_cube_categorical = list(
+                    np.array(checked_neighbors_non_unit_cube)[sort_idx]
+                )
+                neighborhood[hp_name] = [
+                    np.array(checked_neighbors)[sort_idx],
+                    checked_neighbors_non_unit_cube_categorical,
+                ]
+            else:
+                checked_neighbors_non_unit_cube_non_categorical = np.array(
+                    checked_neighbors_non_unit_cube
+                )[sort_idx]
+                neighborhood[hp_name] = [
+                    np.array(checked_neighbors)[sort_idx],
+                    checked_neighbors_non_unit_cube_non_categorical,
+                ]
+
+        return neighborhood
+
+    def _predict_mean_var(self, config: Configuration) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Small wrapper to predict marginalized over instances.
+
+        Parameter
+        ---------
+        config:Configuration
+            The self.incumbent of which the performance across the whole instance set is to be
+            estimated.
+
+        Returns
+        -------
+        mean: np.ndarray
+            The mean performance over the instance set.
+        var: np.ndarray
+            The variance over the instance set. If logged values are used, the variance might not
+            be able to be used.
+        """
+        config = impute_inactive_values(config)
+        array = np.array([config.get_array()])
+        mean, var = self._model.predict_marginalized(array)
+
+        return mean.squeeze(), var.squeeze()

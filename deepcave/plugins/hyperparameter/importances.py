@@ -354,12 +354,11 @@ class Importances(StaticPlugin):
         hp_names = run.configspace.get_hyperparameter_names()
         budgets = run.get_budgets(include_combined=True)
 
+        # Initialize the evaluator
         evaluator: Optional[Union[LocalEvaluator, GlobalEvaluator]] = None
         if method == "local" and isinstance(objective,list):
-            # Initialize the evaluator
             evaluator = MOLPI(run)
         elif method == "local":
-            # Initialize the evaluator
             evaluator = LocalEvaluator(run)
         elif method == "global" and isinstance(objective,list):
             evaluator = MOfANOVA(run)
@@ -433,8 +432,9 @@ class Importances(StaticPlugin):
             The figure of the importances.
         """
 
-        if inputs["method"] == 'global' and inputs["objective_id2"] and inputs["objective_id2"]!=-1:
+        if inputs["objective_id2"] and inputs["objective_id2"]!=-1:
             return Importances.load_ouputs_mo_fanova(inputs, outputs)
+
 
         # First selected, should always be shown first
         selected_hp_names = inputs["hyperparameter_names"]

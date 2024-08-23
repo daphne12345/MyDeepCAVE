@@ -150,16 +150,11 @@ class MOLPI(LPI):
             self._model = FanovaForest(self.cs, n_trees=n_trees, seed=seed)
             self._model.train(X, Y)
             importances = self.calc_one_weighting()
-            print(importances)
-            # df_res = pd.DataFrame(importances).loc[0:1].T.reset_index()
-            print(pd.DataFrame(importances))
             df_res = pd.DataFrame(importances).loc[0:1].T.reset_index()
-            print(df_res)
             df_res['weight'] = w[0]
             df_all = pd.concat([df_all, df_res])
         self.importances = df_all.rename(columns={0: 'importance', 1: 'variance', 'index':'hp_name'}).reset_index(drop=True)
         self.importances = self.importances.applymap(lambda x: max(x, 0) if not isinstance(x, str) else x) #no negative values
-        print(self.importances)
 
     def calc_one_weighting(self):
         # Get neighborhood sampled on an unit-hypercube.
@@ -240,12 +235,6 @@ class MOLPI(LPI):
             # Avoid division by zero
             if delta == 0:
                 delta = 1
-
-            imp_over_mean = (np.mean(tmp_perf) - performances[hp_name][incumbent_idx]) / delta
-            imp_over_median = (np.median(tmp_perf) - performances[hp_name][incumbent_idx]) / delta
-            imp_over_max = (np.max(tmp_perf) - performances[hp_name][incumbent_idx]) / delta
-
-            # importances[hp_name] = np.array([imp_over_mean, imp_over_median, imp_over_max])
 
         # Creating actual importance value (by normalizing over sum of vars)
         num_trees = len(list(predictions.values())[0][0])

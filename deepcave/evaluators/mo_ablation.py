@@ -21,12 +21,51 @@ from collections import OrderedDict
 import numpy as np
 
 from deepcave.evaluators.epm.random_forest_surrogate import RandomForestSurrogate
+from deepcave.evaluators.ablation import Ablation
 from deepcave.runs import AbstractRun
 from deepcave.runs.objective import Objective
 from deepcave.utils.logs import get_logger
+import pandas as pd
+
+class WeightedModel:
+    def __init__(self, seed, n_trees):
+        self.models = [RandomForestSurrogate(self.cs, seed=seed, n_trees=n_trees), RandomForestSurrogate(self.cs, seed=seed, n_trees=n_trees)]
+
+    def train(self, X, Ys):
+        """
+        Train a Random Forest model as surrogate to predict the performance of a configuration. Where the input data are the
+        configurations and the objective.
+        :param group: the runs as group
+        :param df: dataframe containing the encoded configurations
+        :param objective: the name of the target column
+        :return: the trained model
+        """
+        for model, Y in zip(self.models,Ys):
+            model.fit(X, Y)
+
+    def predict(self, cfg, weighting):
+        """
+        Predicts the performance of the input configuration with the input list of models. The model results are normalized,
+        weighted by the input wieghtings and summed.
+        :param group: the runs as group
+        :param cfg: configuration
+        :param models: list of models
+        :param weighting: tuple of weightings
+        :return: the mean and variance of the normalized weighted sum of predictions
+        """
+        mean, var = 0, 0
+        obj = 0
+        for model, w in zip(self.models, weighting):
+            all_predictions = np.stack([tree.predict(cfg) for tree in model.estimators_])
+            normed_preds = (all_predictions - all_predictions.min()) / (all_predictions.max() - all_predictions.min())
+            mean += w * np.mean(normed_preds, axis=0)
+            var += w * np.var(normed_preds, axis=0)
+            obj += 1
+        return mean, var
 
 
-class Ablation:
+
+class MOAblation(Ablation):
     """
     Provide an evaluator of the ablation paths.
 
@@ -50,12 +89,7 @@ class Ablation:
     """
 
     def __init__(self, run: AbstractRun):
-        self.run = run
-        self.cs = run.configspace
-        self.hp_names = list(self.cs.keys())
-        self.performances: Optional[Dict[Any, Any]] = None
-        self.improvements: Optional[Dict[Any, Any]] = None
-        self.logger = get_logger(self.__class__.__name__)
+        super().__init__(run)
 
     def calculate(
         self,
@@ -81,24 +115,42 @@ class Ablation:
             The seed for the surrogate model.
             Default is 0.
         """
-        if isinstance(objectives, list) and len(objectives) > 1:
-            raise ValueError("Only one objective is supported for ablation paths.")
-        objective = objectives[0] if isinstance(objectives, list) else objectives
-        assert isinstance(objective, Objective)
+        for objective in objectives:
+            assert isinstance(objective, Objective)
 
         performances: OrderedDict = OrderedDict()
         improvements: OrderedDict = OrderedDict()
 
-        df = self.run.get_encoded_data(objective, budget, specific=True)
+        df = self.run.get_encoded_data(objectives, budget, specific=True, include_config_ids=True)
 
         # Obtain all configurations with theirs costs
-        df = df.dropna(subset=[objective.name])
+        df = df.dropna(subset=[obj.name for obj in objectives])
         X = df[list(self.run.configspace.keys())].to_numpy()
-        Y = df[objective.name].to_numpy()
 
-        # A Random Forest Regressor is used as surrogate model
-        self._model = RandomForestSurrogate(self.cs, seed=seed, n_trees=n_trees)
-        self._model._fit(X, Y)
+        # normalize objectives
+        objectives_normed = list()
+        for obj in objectives:
+            normed = obj.name + '_normed'
+            df[normed] = (df[obj.name] - df[obj.name].min()) / (df[obj.name].max() - df[obj.name].min())
+            objectives_normed.append(normed)
+
+
+        Ys = [df[obj.name].to_numpy() for obj in objectives_normed]
+        self._model = WeightedModel(seed, n_trees)
+        self._model.train(X, Ys)
+
+        df_all = pd.DataFrame([])
+        weightings = self.get_weightings(objectives_normed, df)
+
+        for w in weightings:
+            for w in weightings:
+                df_res, default = calculate_ablation_path(group, df, objectives_normed, w, models)
+                df_res = df_res.drop(columns=['index'])
+                df_res['weight_for_' + objectives_normed[0]] = w[0]
+                df_all = pd.concat([df_all, df_res])
+
+
+
 
         # Get the incumbent configuration
         incumbent_config, _ = self.run.get_incumbent(budget=budget, objectives=objective)

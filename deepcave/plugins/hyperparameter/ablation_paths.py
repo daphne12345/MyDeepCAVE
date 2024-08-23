@@ -21,6 +21,7 @@ from dash.exceptions import PreventUpdate
 
 from deepcave import config
 from deepcave.evaluators.ablation import Ablation
+from deepcave.evaluators.mo_ablation import MOAblation
 from deepcave.plugins.static import StaticPlugin
 from deepcave.runs import AbstractRun
 from deepcave.utils.cast import optional_int
@@ -63,9 +64,19 @@ class AblationPaths(StaticPlugin):
                 [
                     dbc.Col(
                         [
-                            dbc.Label("Objective"),
+                            dbc.Label("Objective 1"),
                             dbc.Select(
-                                id=register("objective_id", ["value", "options"], type=int),
+                                id=register("objective_id1", ["value", "options"], type=int),
+                                placeholder="Select objective ...",
+                            ),
+                        ],
+                        md=6,
+                    ),
+                    dbc.Col(
+                        [
+                            dbc.Label("Objective 2"),
+                            dbc.Select(
+                                id=register("objective_id2", ["value", "options"], type=int),
                                 placeholder="Select objective ...",
                             ),
                         ],
@@ -206,8 +217,15 @@ class AblationPaths(StaticPlugin):
         # Prepare objectives
         objective_names = run.get_objective_names()
         objective_ids = run.get_objective_ids()
+        objective_value1 = inputs["objective_id1"]["value"]
+        objective_value2 = inputs["objective_id2"]["value"]
+
         objective_options = get_select_options(objective_names, objective_ids)
-        objective_value = inputs["objective_id"]["value"]
+
+        objective_options2 = [dic for dic in objective_options if
+                              dic['value'] != objective_value1]  # make sure the same objective cannot be chosen twice
+        objective_options2 += [
+            {'label': 'Select objective ...', 'value': -1}]  # add the option to deselect the second objective
 
         # Prepare budgets
         budgets = run.get_budgets(human=True)
@@ -219,8 +237,8 @@ class AblationPaths(StaticPlugin):
         n_hps = inputs["n_hps"]["value"]
 
         # Pre-set values
-        if objective_value is None:
-            objective_value = objective_ids[0]
+        if objective_value1 is None:
+            objective_value1 = objective_ids[0]
 
         if n_hps == 0:
             n_hps = len(hp_names)
@@ -231,9 +249,13 @@ class AblationPaths(StaticPlugin):
                 budget_value = budget_ids[-1]
 
         return {
-            "objective_id": {
+            "objective_id1": {
                 "options": objective_options,
-                "value": objective_value,
+                "value": objective_value1,
+            },
+            "objective_id2": {
+                "options": objective_options2,
+                "value": objective_value2,
             },
             "budget_id": {
                 "options": budget_options,
@@ -275,7 +297,10 @@ class AblationPaths(StaticPlugin):
         RuntimeError
             If the number of trees is not specified.
         """
-        objective = run.get_objective(inputs["objective_id"])
+        objective = run.get_objective(inputs["objective_id1"])
+        if inputs["objective_id2"]:
+            if inputs["objective_id2"] != -1:
+                objective = [objective, run.get_objective(inputs["objective_id2"])]
         n_trees = inputs["n_trees"]
 
         if n_trees is None:
@@ -283,7 +308,11 @@ class AblationPaths(StaticPlugin):
 
         budgets = run.get_budgets(include_combined=True)
 
-        evaluator = Ablation(run)
+
+        if isinstance(objective,list):
+            evaluator = MOAblation(run)
+        else:
+            evaluator = Ablation(run)
 
         # Collect data
         data = {}
@@ -351,9 +380,137 @@ class AblationPaths(StaticPlugin):
         return [figure1, figure2]
             The figures of the ablation paths.
         """
+        if inputs["objective_id2"] and inputs["objective_id2"]!=-1:
+            return AblationPaths.load_ouputs_mo(inputs, outputs)
+
+
         # First selected, should always be shown first
         selected_budget_id = inputs["budget_id"]
         objective = run.get_objective(inputs["objective_id"])
+        n_hps = inputs["n_hps"]
+        show_confidence = inputs["show_confidence"]
+
+        if n_hps == "" or n_hps is None:
+            raise PreventUpdate
+        else:
+            n_hps = int(n_hps)
+
+        # Collect data
+        data1, data2 = {}, {}
+        for budget_id, results in outputs.items():
+            # Important to cast budget_id here because of json serialization
+            budget_id = int(budget_id)
+            if budget_id != selected_budget_id:
+                continue
+
+            x = []
+            y1, y2 = [], []
+            error_y1, error_y2 = [], []
+            for hp_name, result in results[0].items():
+                x += [hp_name]
+                y1 += [result[0]]
+                error_y1 += [result[1]]
+            for _, result in results[1].items():
+                y2 += [result[0]]
+                error_y2 += [result[1]]
+
+            data1[budget_id] = (np.array(x), np.array(y1), np.array(error_y1))
+            data2[budget_id] = (np.array(x), np.array(y2), np.array(error_y2))
+
+        bar_data1, bar_data2 = [], []
+
+        for budget_id, values in data1.items():
+            budget = run.get_budget(budget_id, human=True)
+
+            x = list(values[0][:n_hps])
+
+            bar_data1 += [
+                go.Scatter(
+                    name=budget,
+                    x=x,
+                    y=values[1][:n_hps],
+                    error_y=dict(array=values[2][:n_hps]) if show_confidence else None,
+                    line=dict(color=get_color(0)),
+                )
+            ]
+
+        for budget_id, values in data2.items():
+            budget = run.get_budget(budget_id, human=True)
+
+            x = list(values[0][:n_hps])
+
+            bar_data2 += [
+                go.Bar(
+                    name=budget,
+                    x=x,
+                    y=values[1][:n_hps],
+                    error_y_array=values[2][:n_hps] if show_confidence else None,
+                    marker_color=get_color(0),
+                )
+            ]
+
+        figure1 = go.Figure(data=bar_data1)
+        figure1.update_layout(
+            barmode="group",
+            title={
+                "text": "Ablation Path when Iteratively Setting the Hyperparameters to Their "
+                "Incumbent Value",
+                "font": {"size": config.FIGURE_FONT_SIZE + 2},
+            },
+            yaxis_title=objective.name,
+            legend={"title": "Budget"},
+            margin=dict(t=50, b=0, l=0, r=0),
+            xaxis=dict(tickangle=-45),
+            font=dict(size=config.FIGURE_FONT_SIZE),
+        )
+        save_image(figure1, "ablation_path_performance.pdf")
+
+        figure2 = go.Figure(data=bar_data2)
+        figure2.update_layout(
+            barmode="group",
+            title={
+                "text": "Change in Objective with Respect to the Previous Ablation Step",
+                "font": {"size": config.FIGURE_FONT_SIZE + 2},
+            },
+            yaxis_title=f"Change in {objective.name}",
+            legend={"title": "Budget"},
+            margin=dict(t=50, b=0, l=0, r=0),
+            xaxis=dict(tickangle=-45),
+            font=dict(size=config.FIGURE_FONT_SIZE),
+        )
+        save_image(figure2, "ablation_path_improvement.pdf")
+
+        return [figure1, figure2]
+
+    @staticmethod
+    def load_outputs_mo(run, inputs, outputs) -> List[go.Figure]:  # type: ignore
+        """
+        Read in raw data and prepare for layout.
+
+        Note
+        ----
+        The passed inputs are cleaned and therefore differ
+        compared to 'load_inputs' or 'load_dependency_inputs'.
+        Please see '_clean_inputs' for more information.
+
+        Parameters
+        ----------
+        run
+            The selected run.
+        inputs
+            Input and filter values from the user.
+        outputs
+            Raw output from the run.
+
+        Returns
+        -------
+        return [figure1, figure2]
+            The figures of the ablation paths.
+        """
+        # First selected, should always be shown first
+        selected_budget_id = inputs["budget_id"]
+        objective1 = run.get_objective(inputs["objective_id1"])
+        objective2 = run.get_objective(inputs["objective_id2"])
         n_hps = inputs["n_hps"]
         show_confidence = inputs["show_confidence"]
 

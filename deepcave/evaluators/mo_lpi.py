@@ -22,10 +22,12 @@ from deepcave.constants import COMBINED_COST_NAME
 from deepcave.evaluators.epm.fanova_forest import FanovaForest
 from deepcave.runs import AbstractRun
 from deepcave.runs.objective import Objective
+from deepcave.evaluators.lpi import LPI
+import pandas as pd
 
 
 # https://github.com/automl/ParameterImportance/blob/f4950593ee627093fc30c0847acc5d8bf63ef84b/pimp/evaluator/local_parameter_importance.py#L27
-class MOLPI:
+class MOLPI(LPI):
     """
     Calculate the local parameter importance (LPI).
 
@@ -56,11 +58,33 @@ class MOLPI:
     """
 
     def __init__(self, run: AbstractRun):
-        self.run = run
-        self.cs = run.configspace
-        self.hp_names = self.cs.get_hyperparameter_names()
-        self.variances: Optional[Dict[Any, List[Any]]] = None
-        self.importances: Optional[Dict[Any, Any]] = None
+        super().__init__(run)
+        # self.run = run
+        # self.cs = run.configspace
+        # self.hp_names = self.cs.get_hyperparameter_names()
+        # self.variances: Optional[Dict[Any, List[Any]]] = None
+        # self.importances: Optional[Dict[Any, Any]] = None
+
+    def get_weightings(self, objectives_normed, df):
+        """
+        Returns the weighting used for the weighted importance. It uses the points on the pareto-front as weightings
+        :param objectives_normed: the normalized objective names as a list of strings
+        :param df: dataframe containing the encoded data
+        :return: the weightings as a list of lists
+        """
+        optimized = self.is_pareto_efficient(df[objectives_normed].to_numpy())
+        return df[optimized][objectives_normed].T.apply(lambda values: values / values.sum()).T.to_numpy()
+
+    def is_pareto_efficient(serlf, costs):
+        """
+        Find the pareto-efficient points
+        :param costs: An (n_points, n_costs) array
+        :return: A (n_points, ) boolean array, indicating whether each point is Pareto efficient
+        """
+        is_efficient = np.ones(costs.shape[0], dtype=bool)
+        for i, c in enumerate(costs):
+            is_efficient[i] = np.all(np.any(costs[:i] > c, axis=1)) and np.all(np.any(costs[i + 1:] > c, axis=1))
+        return is_efficient
 
     def calculate(
         self,
@@ -108,13 +132,36 @@ class MOLPI:
             objectives=objectives, budget=budget, specific=True, include_combined_cost=True
         )
         X = df[self.hp_names].to_numpy()
-        Y = df[COMBINED_COST_NAME].to_numpy()
 
-        # Get model and train it
-        # Use same forest as for fanova
-        self._model = FanovaForest(self.cs, n_trees=n_trees, seed=seed)
-        self._model.train(X, Y)
+        # normalize objectives
+        objectives_normed = list()
+        for obj in objectives:
+            normed = obj.name + '_normed'
+            df[normed] = (df[obj.name] - df[obj.name].min()) / (df[obj.name].max() - df[obj.name].min())
+            objectives_normed.append(normed)
 
+        df_all = pd.DataFrame([])
+        weightings = self.get_weightings(objectives_normed, df)
+
+        for w in weightings:
+            Y = sum(df[obj] * weighting for obj, weighting in zip(objectives_normed, w)).to_numpy()
+            # Get model and train it
+            # Use same forest as for fanova
+            self._model = FanovaForest(self.cs, n_trees=n_trees, seed=seed)
+            self._model.train(X, Y)
+            importances, variances = self.calc_one_weighting()
+            print(variances)
+            # df_res = pd.DataFrame(importances).loc[0:1].T.reset_index()
+            print(pd.Series(importances))
+            print(pd.Series(variances))
+            df_res = pd.concat([pd.Series(importances), pd.Series(variances)])
+            print(df_res)
+            df_res['weight'] = w[0]
+            df_all = pd.concat([df_all, df_res])
+        self.importances = df_all.rename(columns={0: 'importance', 1: 'variance', 'index': 'hp_name'}).reset_index(
+            drop=True)
+
+    def calc_one_weighting(self):
         # Get neighborhood sampled on an unit-hypercube.
         neighborhood = self._get_neighborhood()
 
@@ -227,8 +274,7 @@ class MOLPI:
             ]
             for p, trees in overall_var_per_tree.items()
         }
-        self.variances = overall_var_per_tree
-        self.importances = importances
+        return importances, overall_var_per_tree
 
     def get_importances(self, hp_names: List[str]) -> Dict[str, Tuple[float, float]]:
         """

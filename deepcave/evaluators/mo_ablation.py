@@ -126,6 +126,7 @@ class MOAblation(Ablation):
             assert isinstance(objective, Objective)
 
         df = self.run.get_encoded_data(objectives, budget, specific=True, include_config_ids=True)
+        print(df)
 
         # Obtain all configurations with theirs costs
         df = df.dropna(subset=[obj.name for obj in objectives])

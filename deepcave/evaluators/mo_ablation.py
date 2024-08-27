@@ -216,7 +216,7 @@ class MOAblation(Ablation):
         incumbent_config: Any,
         def_cost: Any,
         hp_it: List[str],
-        weighting: List[float, float]
+        weighting: Tuple[float, float]
     ) -> Tuple[Any, Any, Any, Any]:
         """
         Calculate the ablation importance for each hyperparameter.

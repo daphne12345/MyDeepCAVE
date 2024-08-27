@@ -27,44 +27,6 @@ from deepcave.runs.objective import Objective
 from deepcave.utils.logs import get_logger
 import pandas as pd
 
-class WeightedModel:
-    def __init__(self, seed, n_trees):
-        self.models = [RandomForestSurrogate(self.cs, seed=seed, n_trees=n_trees), RandomForestSurrogate(self.cs, seed=seed, n_trees=n_trees)]
-
-    def train(self, X, Ys):
-        """
-        Train a Random Forest model as surrogate to predict the performance of a configuration. Where the input data are the
-        configurations and the objective.
-        :param group: the runs as group
-        :param df: dataframe containing the encoded configurations
-        :param objective: the name of the target column
-        :return: the trained model
-        """
-        for model, Y in zip(self.models,Ys):
-            model.fit(X, Y)
-
-    def predict(self, cfg, weighting):
-        """
-        Predicts the performance of the input configuration with the input list of models. The model results are normalized,
-        weighted by the input wieghtings and summed.
-        :param group: the runs as group
-        :param cfg: configuration
-        :param models: list of models
-        :param weighting: tuple of weightings
-        :return: the mean and variance of the normalized weighted sum of predictions
-        """
-        mean, var = 0, 0
-        obj = 0
-        for model, w in zip(self.models, weighting):
-            all_predictions = np.stack([tree.predict(cfg) for tree in model.estimators_])
-            normed_preds = (all_predictions - all_predictions.min()) / (all_predictions.max() - all_predictions.min())
-            mean += w * np.mean(normed_preds, axis=0)
-            var += w * np.var(normed_preds, axis=0)
-            obj += 1
-        return mean, var
-
-
-
 class MOAblation(Ablation):
     """
     Provide an evaluator of the ablation paths.
@@ -90,6 +52,51 @@ class MOAblation(Ablation):
 
     def __init__(self, run: AbstractRun):
         super().__init__(run)
+        self.models = []
+        self.df_importances = pd.DataFrame([])
+        self.default = 0
+
+    def get_importances(self):
+        return self.df_importances.to_json()
+
+
+    def get_weightings(self, objectives_normed, df):
+        """
+        Returns the weighting used for the weighted importance. It uses the points on the pareto-front as weightings
+        :param objectives_normed: the normalized objective names as a list of strings
+        :param df: dataframe containing the encoded data
+        :return: the weightings as a list of lists
+        """
+        optimized = self.is_pareto_efficient(df[objectives_normed].to_numpy())
+        return df[optimized][objectives_normed].T.apply(lambda values: values / values.sum()).T.to_numpy()
+
+    def is_pareto_efficient(serlf, costs):
+        """
+        Find the pareto-efficient points
+        :param costs: An (n_points, n_costs) array
+        :return: A (n_points, ) boolean array, indicating whether each point is Pareto efficient
+        """
+        is_efficient = np.ones(costs.shape[0], dtype=bool)
+        for i, c in enumerate(costs):
+            is_efficient[i] = np.all(np.any(costs[:i] > c, axis=1)) and np.all(np.any(costs[i + 1:] > c, axis=1))
+        return is_efficient
+
+    def predict(self, cfg, weighting):
+        """
+        Predicts the performance of the input configuration with the input list of models. The model results are normalized,
+        weighted by the input wieghtings and summed.
+        :param group: the runs as group
+        :param cfg: configuration
+        :param models: list of models
+        :param weighting: tuple of weightings
+        :return: the mean and variance of the normalized weighted sum of predictions
+        """
+        mean, var = 0, 0
+        for model, w in zip(self.models, weighting):
+            preds, vars = model.predict(np.array([cfg]))
+            mean += w * (preds - preds.min()) / (preds.max() - preds.min())
+            var += w * (vars - vars.min()) / (vars.max() - vars.min())
+        return mean, var
 
     def calculate(
         self,
@@ -118,9 +125,6 @@ class MOAblation(Ablation):
         for objective in objectives:
             assert isinstance(objective, Objective)
 
-        performances: OrderedDict = OrderedDict()
-        improvements: OrderedDict = OrderedDict()
-
         df = self.run.get_encoded_data(objectives, budget, specific=True, include_config_ids=True)
 
         # Obtain all configurations with theirs costs
@@ -134,129 +138,85 @@ class MOAblation(Ablation):
             df[normed] = (df[obj.name] - df[obj.name].min()) / (df[obj.name].max() - df[obj.name].min())
             objectives_normed.append(normed)
 
+            # train one model per objective
+            Y = df[obj.name].to_numpy()
+            model = RandomForestSurrogate(self.cs, seed=seed, n_trees=n_trees)
+            model._fit(X, Y)
+            self.models.append(model)
 
-        Ys = [df[obj.name].to_numpy() for obj in objectives_normed]
-        self._model = WeightedModel(seed, n_trees)
-        self._model.train(X, Ys)
 
-        df_all = pd.DataFrame([])
         weightings = self.get_weightings(objectives_normed, df)
 
         for w in weightings:
-            for w in weightings:
-                df_res, default = calculate_ablation_path(group, df, objectives_normed, w, models)
-                df_res = df_res.drop(columns=['index'])
-                df_res['weight_for_' + objectives_normed[0]] = w[0]
-                df_all = pd.concat([df_all, df_res])
+            df_res = self.calculate_ablation_path(df, objectives_normed, w, budget)
+            df_res = df_res.drop(columns=['index'])
+            df_res['weight'] = w[0]
+            self.df_importances = pd.concat([self.df_importances, df_res])
+        self.default = [model.predict([self.run.encode_config(self.cs.get_default_configuration(), specific=True)]) for model in self.models]
 
 
-
-
+    def calculate_ablation_path(self, df, objectives_normed, weighting, budget):
         # Get the incumbent configuration
-        incumbent_config, _ = self.run.get_incumbent(budget=budget, objectives=objective)
-        incumbent_encode = self.run.encode_config(incumbent_config)
+        incumbent_cfg_id = np.argmin(sum(df[obj] * w for obj, w in zip(objectives_normed, weighting)))
+        incumbent_config = self.run.get_config(df.iloc[incumbent_cfg_id]['config_id'])
 
         # Get the default configuration
         self.default_config = self.cs.get_default_configuration()
-        default_encode = self.run.encode_config(self.default_config)
+        default_encode = self.run.encode_config(self.default_config, specific=True)
 
         # Obtain the predicted cost of the default and incumbent configuration
-        def_cost, def_std = self._model.predict(np.array([default_encode]))
-        def_cost, def_std = def_cost[0], def_std[0]
-        inc_cost, _ = self._model.predict(np.array([incumbent_encode]))
+        def_cost, def_std = self.predict(default_encode, weighting)
+        inc_cost, _ = self.predict(self.run.encode_config(incumbent_config, specific=True), weighting)
 
+        # TODO make sure objectives are minimized
         # For further calculations, assume that the objective is to be minimized
-        if objective.optimize == "upper":
-            def_cost = -def_cost
-            inc_cost = -inc_cost
+        # if objective.optimize == "upper":
+        #     def_cost = -def_cost
+        #     inc_cost = -inc_cost
 
         if inc_cost > def_cost:
             self.logger.warning(
                 "The predicted incumbent objective is worse than the predicted default "
                 f"objective for budget: {budget}. Aborting ablation path calculation."
             )
-            performances = OrderedDict({hp_name: (0, 0) for hp_name in ["default"] + self.hp_names})
-            improvements = OrderedDict({hp_name: (0, 0) for hp_name in ["default"] + self.hp_names})
+            return None
         else:
+
             # Copy the hps names as to not remove objects from the original list
             hp_it = self.hp_names.copy()
-
-            # Add improvement and performance of the default configuration
-            improvements["default"] = (0, 0)
-            if objective.optimize == "upper":
-                performances["default"] = (-def_cost, def_std)
-            else:
-                performances["default"] = (def_cost, def_std)
+            df_abl = pd.DataFrame([])
+            df_abl = pd.concat(
+                [df_abl,
+                 pd.DataFrame({'hp_name': 'Default', 'importance': 0, 'variance': def_std, 'new_performance': def_cost})])
 
             for i in range(len(hp_it)):
                 # Get the results of the current ablation iteration
                 continue_ablation, max_hp, max_hp_cost, max_hp_std = self._ablation(
-                    objective, budget, incumbent_config, def_cost, hp_it
+                    budget, incumbent_config, def_cost, hp_it, weighting
                 )
 
                 if not continue_ablation:
                     break
 
-                if objective.optimize == "upper":
-                    # For returning the importance, flip back the objective if it was flipped before
-                    performances[max_hp] = (-max_hp_cost, max_hp_std)
-                else:
-                    performances[max_hp] = (max_hp_cost, max_hp_std)
-                impr_std = np.sqrt(def_std**2 + max_hp_std**2)
-                improvements[max_hp] = ((def_cost - max_hp_cost), impr_std)
-                # New 'default' cost and std
+                diff = def_cost - max_hp_cost
                 def_cost = max_hp_cost
-                def_std = max_hp_std
+
+                df_abl = pd.concat(
+                    [df_abl, pd.DataFrame(
+                        {'hp_name': max_hp, 'ablation': diff, 'variance': max_hp_std, 'new_performance': max_hp_cost,
+                         'incumbent_cfg_id': incumbent_cfg_id})])
+
                 # Remove the current best hp for keeping the order right
                 hp_it.remove(max_hp)
-
-        self.performances = performances
-        self.improvements = improvements
-
-    def get_ablation_performances(self) -> Optional[Dict[Any, Any]]:
-        """
-        Get the ablation performances.
-
-        Returns
-        -------
-        Optional[Dict[Any, Any]]
-            A dictionary containing the ablation performances.
-
-        Raises
-        ------
-        RuntimeError
-            If the ablation performances have not been calculated.
-        """
-        if self.performances is None:
-            raise RuntimeError("Ablation performances scores must be calculated first.")
-        return self.performances
-
-    def get_ablation_improvements(self) -> Optional[Dict[Any, Any]]:
-        """
-        Get the ablation improvements.
-
-        Returns
-        -------
-        Optional[Dict[Any, Any]]
-            A dictionary containing the ablation improvements.
-
-        Raises
-        ------
-        RuntimeError
-            If the ablation improvements have not been calculated.
-        """
-        if self.improvements is None:
-            raise RuntimeError("Ablation improvements must be calculated first.")
-
-        return self.improvements
+            return df_abl.reset_index(drop=True).reset_index()
 
     def _ablation(
         self,
-        objective: Objective,
         budget: Optional[Union[int, float]],
         incumbent_config: Any,
         def_cost: Any,
         hp_it: List[str],
+        weighting: List[float, float]
     ) -> Tuple[Any, Any, Any, Any]:
         """
         Calculate the ablation importance for each hyperparameter.
@@ -287,14 +247,11 @@ class MOAblation(Ablation):
                 config_copy = copy.copy(self.default_config)
                 config_copy[hp] = incumbent_config[hp]
 
-                new_cost, _ = self._model.predict(np.array([self.run.encode_config(config_copy)]))
-                if objective.optimize == "upper":
-                    new_cost = -new_cost
-
+                new_cost, _ = self.predict(self.run.encode_config(config_copy, specific=True), weighting)
                 difference = def_cost - new_cost
 
                 # Check for the maximum difference hyperparameter in this round
-                if difference >= max_hp_difference:
+                if difference > max_hp_difference:
                     max_hp = hp
                     max_hp_difference = difference
             else:
@@ -303,12 +260,8 @@ class MOAblation(Ablation):
         if max_hp != "":
             # For the maximum impact hyperparameter, switch the default with the incumbent value
             self.default_config[max_hp] = incumbent_config[max_hp]
-            max_hp_cost, max_hp_std = self._model.predict(
-                np.array([self.run.encode_config(self.default_config)])
-            )
-            if objective.optimize == "upper":
-                max_hp_cost = -max_hp_cost
-            return True, max_hp, max_hp_cost[0], max_hp_std[0]
+            max_hp_cost, max_hp_std = self.predict(self.run.encode_config(self.default_config, specific=True), weighting)
+            return True, max_hp, max_hp_cost, max_hp_std
         else:
             self.logger.info(
                 f"End ablation at step {hp_count - len(hp_it) + 1}/{hp_count} "

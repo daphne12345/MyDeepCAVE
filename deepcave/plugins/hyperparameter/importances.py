@@ -560,9 +560,7 @@ class Importances(StaticPlugin):
         # Sort by last fidelity now
         selected_budget_id = max(selected_budget_ids)
         idx = data[selected_budget_id].groupby("hp_name")['importance'].max().sort_values(ascending=False).index
-        print(idx)
         idx = idx[:n_hps]
-        print(idx)
 
         # colors = {label: color for label, color in zip(hps, sns.color_palette('colorblind', n_colors=len(hps)))}
 
@@ -573,7 +571,6 @@ class Importances(StaticPlugin):
         df['weight'] = df['weight'].astype(float)
         df['importance'] = df['importance'].astype(float)
         df['variance'] = df['variance'].astype(float)
-        print(df)
 
         # Group by 'hp_name' and plot each group
         for group_id, group_data in df.groupby('hp_name'):
@@ -599,7 +596,7 @@ class Importances(StaticPlugin):
                 # fillcolor=colors[group_id],
                 line=dict(color='rgba(255,255,255,0)'),
                 hoverinfo='skip',
-                showlegend=False,
+                showlegend=True,
                 opacity=0.2,
             ))
 

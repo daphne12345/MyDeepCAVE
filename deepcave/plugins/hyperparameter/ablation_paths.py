@@ -10,7 +10,7 @@ processing the data and loading the outputs.
 ## Classes
     - Ablation_Paths: This class provides a plugin for the visualization of the ablation paths.
 """
-
+import math
 from typing import Any, Callable, Dict, List
 
 import dash_bootstrap_components as dbc
@@ -27,7 +27,7 @@ from deepcave.runs import AbstractRun
 from deepcave.utils.cast import optional_int
 from deepcave.utils.layout import get_checklist_options, get_select_options, help_button
 from deepcave.utils.styled_plotty import get_color, save_image
-
+import pandas as pd
 
 class AblationPaths(StaticPlugin):
     """
@@ -320,10 +320,12 @@ class AblationPaths(StaticPlugin):
             assert isinstance(budget, (int, float))
             assert isinstance(budget, (int, float))
             evaluator.calculate(objective, budget, n_trees=n_trees, seed=0)
-
-            performances = evaluator.get_ablation_performances()
-            improvements = evaluator.get_ablation_improvements()
-            data[budget_id] = [performances, improvements]
+            if isinstance(objective, list):
+                data[budget_id] = [evaluator.get_importances(), evaluator.default]
+            else:
+                performances = evaluator.get_ablation_performances()
+                improvements = evaluator.get_ablation_improvements()
+                data[budget_id] = [performances, improvements]
         return data  # type: ignore
 
     @staticmethod
@@ -520,88 +522,68 @@ class AblationPaths(StaticPlugin):
             n_hps = int(n_hps)
 
         # Collect data
-        data1, data2 = {}, {}
-        for budget_id, results in outputs.items():
+        data = {}
+        for budget_id, importances_json in outputs.items():
             # Important to cast budget_id here because of json serialization
             budget_id = int(budget_id)
             if budget_id != selected_budget_id:
                 continue
+            df_importances = pd.read_json(importances_json)
+            data[budget_id] = df_importances
 
-            x = []
-            y1, y2 = [], []
-            error_y1, error_y2 = [], []
-            for hp_name, result in results[0].items():
-                x += [hp_name]
-                y1 += [result[0]]
-                error_y1 += [result[1]]
-            for _, result in results[1].items():
-                y2 += [result[0]]
-                error_y2 += [result[1]]
+        # Sort by last fidelity now
+        idx = data[selected_budget_id].groupby("hp_name")['importance'].max().sort_values(ascending=False).index
+        idx = idx[:n_hps]
 
-            data1[budget_id] = (np.array(x), np.array(y1), np.array(error_y1))
-            data2[budget_id] = (np.array(x), np.array(y2), np.array(error_y2))
+        figure = go.Figure()
 
-        bar_data1, bar_data2 = [], []
+        df = data[selected_budget_id][data[selected_budget_id]['hp_name'].isin(idx)]  # only keep selected hps
+        df['weight'] = df['weight'].astype(float)
+        df['importance'] = df['importance'].astype(float)
+        df['variance'] = df['variance'].astype(float)
+        df['new_performance'] = df['new_performance'].astype(float)
 
-        for budget_id, values in data1.items():
-            budget = run.get_budget(budget_id, human=True)
+        df['accuracy'] = np.where(df['hp_name'] == 'Default', 1 - df['new_performance'],
+                                          df['importance'])
 
-            x = list(values[0][:n_hps])
+        grouped_df = df.groupby(['weight', 'hp_name'])['accuracy'].sum().unstack(fill_value=0)
 
-            bar_data1 += [
-                go.Scatter(
-                    name=budget,
-                    x=x,
-                    y=values[1][:n_hps],
-                    error_y=dict(array=values[2][:n_hps]) if show_confidence else None,
-                    line=dict(color=get_color(0)),
-                )
-            ]
+        # Create traces for each hp_name
+        traces = []
+        for column in grouped_df.columns:
+            traces.append(go.Scatter(
+                x=grouped_df.index,
+                y=grouped_df[column],
+                mode='lines',
+                stackgroup='one',  # This makes the traces stacked
+                name=column,
+                hoverinfo='skip',
+                showlegend=True,
+                opacity=0.2
+            ))
 
-        for budget_id, values in data2.items():
-            budget = run.get_budget(budget_id, human=True)
+        fig = go.Figure(data=traces)
 
-            x = list(values[0][:n_hps])
-
-            bar_data2 += [
-                go.Bar(
-                    name=budget,
-                    x=x,
-                    y=values[1][:n_hps],
-                    error_y_array=values[2][:n_hps] if show_confidence else None,
-                    marker_color=get_color(0),
-                )
-            ]
-
-        figure1 = go.Figure(data=bar_data1)
-        figure1.update_layout(
-            barmode="group",
+        # Update the layout
+        fig.update_layout(
+            xaxis_title="Weight for Error",
+            yaxis_title="Importance",
             title={
-                "text": "Ablation Path when Iteratively Setting the Hyperparameters to Their "
-                "Incumbent Value",
-                "font": {"size": config.FIGURE_FONT_SIZE + 2},
-            },
-            yaxis_title=objective.name,
-            legend={"title": "Budget"},
-            margin=dict(t=50, b=0, l=0, r=0),
-            xaxis=dict(tickangle=-45),
+                "text": "MO Ablation Path",
+                "font": {"size": config.FIGURE_FONT_SIZE + 2},},
+            xaxis=dict(range=[0, 1], tickangle=-45),
+            yaxis=dict(
+                range=[
+                    math.floor(10 * (1 - (
+                                df[df['hp_name'] == 'Default']['new_performance'].max() + 0.01))) / 10,
+                    1
+                ]
+            ),
+            margin=config.FIGURE_MARGIN,
             font=dict(size=config.FIGURE_FONT_SIZE),
         )
-        save_image(figure1, "ablation_path_performance.pdf")
 
-        figure2 = go.Figure(data=bar_data2)
-        figure2.update_layout(
-            barmode="group",
-            title={
-                "text": "Change in Objective with Respect to the Previous Ablation Step",
-                "font": {"size": config.FIGURE_FONT_SIZE + 2},
-            },
-            yaxis_title=f"Change in {objective.name}",
-            legend={"title": "Budget"},
-            margin=dict(t=50, b=0, l=0, r=0),
-            xaxis=dict(tickangle=-45),
-            font=dict(size=config.FIGURE_FONT_SIZE),
-        )
-        save_image(figure2, "ablation_path_improvement.pdf")
+        save_image(fig, "ablation_path_performance.pdf")
 
-        return [figure1, figure2]
+
+        return [figure, None]

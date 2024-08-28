@@ -190,7 +190,10 @@ class MOAblation(Ablation):
 
             # Copy the hps names as to not remove objects from the original list
             hp_it = self.hp_names.copy()
-            df_abl = pd.DataFrame({'hp_name': 'Default', 'importance': 0, 'variance': def_std, 'new_performance': def_cost})
+            df_abl = pd.DataFrame([])
+            df_abl = pd.concat(
+                [df_abl, pd.DataFrame(
+                    {'hp_name': 'Default', 'importance': 0, 'variance': def_std, 'new_performance': def_cost})])
 
             for i in range(len(hp_it)):
                 # Get the results of the current ablation iteration

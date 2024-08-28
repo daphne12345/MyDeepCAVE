@@ -94,8 +94,12 @@ class MOAblation(Ablation):
         mean, var = 0, 0
         for model, w in zip(self.models, weighting):
             preds, vars = model.predict(np.array([cfg]))
-            mean += w * (preds - preds.min()) / (preds.max() - preds.min())
-            var += w * (vars - vars.min()) / (vars.max() - vars.min())
+            print(preds)
+            print(preds - preds.min())
+            print(preds.max() - preds.min())
+            print((preds - preds.min()) / (preds.max() - preds.min()))
+            mean += w * ((preds - preds.min()) / (preds.max() - preds.min()))
+            var += w * ((vars - vars.min()) / (vars.max() - vars.min()))
         return mean, var
 
     def calculate(

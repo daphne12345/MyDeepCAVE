@@ -149,7 +149,6 @@ class MOAblation(Ablation):
 
         for w in weightings:
             df_res = self.calculate_ablation_path(df, objectives_normed, w, budget)
-            df_res = df_res.drop(columns=['index'])
             df_res['weight'] = w[0]
             self.df_importances = pd.concat([self.df_importances, df_res])
         self.df_importances = self.df_importances.reset_index(drop=True)

@@ -125,13 +125,11 @@ class MOAblation(Ablation):
             assert isinstance(objective, Objective)
 
         df = self.run.get_encoded_data(objectives, budget, specific=True, include_config_ids=True)
-        print(df)
 
         # Obtain all configurations with theirs costs
         df = df.dropna(subset=[obj.name for obj in objectives])
         X = df[list(self.run.configspace.keys())].to_numpy()
 
-        print(X)
 
         # normalize objectives
         objectives_normed = list()
@@ -151,12 +149,10 @@ class MOAblation(Ablation):
 
         for w in weightings:
             df_res = self.calculate_ablation_path(df, objectives_normed, w, budget)
-            print(df_res)
             df_res = df_res.drop(columns=['index'])
             df_res['weight'] = w[0]
             self.df_importances = pd.concat([self.df_importances, df_res])
         self.df_importances = self.df_importances.reset_index(drop=True)
-        print(self.df_importances)
 
 
     def calculate_ablation_path(self, df, objectives_normed, weighting, budget):
@@ -170,7 +166,6 @@ class MOAblation(Ablation):
 
         # Obtain the predicted cost of the default and incumbent configuration
         def_cost, def_std = self.predict(default_encode, weighting)
-        print('def_cost', def_cost)
         inc_cost, _ = self.predict(self.run.encode_config(incumbent_config, specific=True), weighting)
 
         # TODO make sure objectives are minimized

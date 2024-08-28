@@ -565,6 +565,7 @@ class AblationPaths(StaticPlugin):
 
         fig = go.Figure(data=traces)
 
+        print(df)
         # Update the layout
         fig.update_layout(
             xaxis_title="Weight for Error",

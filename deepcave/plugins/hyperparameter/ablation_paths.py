@@ -531,7 +531,7 @@ class AblationPaths(StaticPlugin):
 
         # Sort by last fidelity now
         idx = data[selected_budget_id].groupby("hp_name")['importance'].max().sort_values(ascending=False).index
-        idx = idx[:n_hps] + ['Default']
+        idx = list(idx[:n_hps]) + ['Default']
         print(idx)
 
         figure = go.Figure()

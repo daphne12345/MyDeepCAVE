@@ -546,11 +546,10 @@ class AblationPaths(StaticPlugin):
 
         grouped_df = df.groupby(['weight', 'hp_name'])['accuracy'].sum().unstack(fill_value=0)
 
-        print(grouped_df)
-
         # Create traces for each hp_name
         traces = []
         for column in grouped_df.columns:
+            print(column)
             traces.append(go.Scatter(
                 x=grouped_df.index,
                 y=grouped_df[column],

@@ -533,8 +533,6 @@ class AblationPaths(StaticPlugin):
         idx = data[selected_budget_id].groupby("hp_name")['importance'].max().sort_values(ascending=False).index
         idx = list(idx[:n_hps]) + ['Default']
 
-        figure = go.Figure()
-
         df = data[selected_budget_id][data[selected_budget_id]['hp_name'].isin(idx)]  # only keep selected hps
         df['weight'] = df['weight'].astype(float)
         df['importance'] = df['importance'].astype(float)
@@ -549,7 +547,6 @@ class AblationPaths(StaticPlugin):
         # Create traces for each hp_name
         traces = []
         for column in grouped_df.columns:
-            print(column)
             traces.append(go.Scatter(
                 x=grouped_df.index,
                 y=grouped_df[column],
@@ -585,4 +582,4 @@ class AblationPaths(StaticPlugin):
         save_image(fig, "ablation_path_performance.pdf")
 
 
-        return [figure, None]
+        return [fig, None]

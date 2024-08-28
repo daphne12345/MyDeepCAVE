@@ -170,6 +170,7 @@ class MOAblation(Ablation):
 
         # Obtain the predicted cost of the default and incumbent configuration
         def_cost, def_std = self.predict(default_encode, weighting)
+        print('def_cost', def_cost)
         inc_cost, _ = self.predict(self.run.encode_config(incumbent_config, specific=True), weighting)
 
         # TODO make sure objectives are minimized

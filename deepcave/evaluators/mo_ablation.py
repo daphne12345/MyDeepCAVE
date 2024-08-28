@@ -156,6 +156,7 @@ class MOAblation(Ablation):
             df_res = df_res.drop(columns=['index'])
             df_res['weight'] = w[0]
             self.df_importances = pd.concat([self.df_importances, df_res])
+        self.df_importances = self.df_importances.reset_index(drop=True)
         print(self.df_importances)
         self.default = [model.predict(np.array([self.run.encode_config(self.cs.get_default_configuration(), specific=True)])) for model in self.models]
         print(self.default)

@@ -383,7 +383,7 @@ class AblationPaths(StaticPlugin):
             The figures of the ablation paths.
         """
         if inputs["objective_id2"] and inputs["objective_id2"]!=-1:
-            return AblationPaths.load_outputs_mo(run, inputs, outputs)
+            return AblationPaths.load_outputs_mo(inputs, outputs)
 
 
         # First selected, should always be shown first
@@ -486,7 +486,7 @@ class AblationPaths(StaticPlugin):
 
     @staticmethod
 
-    def load_outputs_mo(run, inputs, outputs) -> List[go.Figure]:  # type: ignore
+    def load_outputs_mo(inputs, outputs) -> List[go.Figure]:  # type: ignore
         """
         Read in raw data and prepare for layout.
 
@@ -512,10 +512,7 @@ class AblationPaths(StaticPlugin):
         """
         # First selected, should always be shown first
         selected_budget_id = inputs["budget_id"]
-        objective1 = run.get_objective(inputs["objective_id1"])
-        objective2 = run.get_objective(inputs["objective_id2"])
         n_hps = inputs["n_hps"]
-        show_confidence = inputs["show_confidence"]
 
         if n_hps == "" or n_hps is None:
             raise PreventUpdate
@@ -534,7 +531,7 @@ class AblationPaths(StaticPlugin):
 
         # Sort by last fidelity now
         idx = data[selected_budget_id].groupby("hp_name")['importance'].max().sort_values(ascending=False).index
-        idx = idx[:n_hps]
+        idx = idx[:n_hps] + ['Default']
 
         figure = go.Figure()
 

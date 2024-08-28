@@ -206,7 +206,7 @@ class MOAblation(Ablation):
 
                 df_abl = pd.concat(
                     [df_abl, pd.DataFrame(
-                        {'hp_name': max_hp, 'importance': diff, 'variance': max_hp_std, 'new_performance': max_hp_cost}, index=i)])
+                        {'hp_name': max_hp, 'importance': diff, 'variance': max_hp_std, 'new_performance': max_hp_cost}, index=i+1)])
 
                 # Remove the current best hp for keeping the order right
                 hp_it.remove(max_hp)

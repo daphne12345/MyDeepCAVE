@@ -383,7 +383,7 @@ class AblationPaths(StaticPlugin):
             The figures of the ablation paths.
         """
         if inputs["objective_id2"] and inputs["objective_id2"]!=-1:
-            return AblationPaths.load_outputs_mo(inputs, outputs)
+            return AblationPaths.load_outputs_mo(run, inputs, outputs)
 
 
         # First selected, should always be shown first

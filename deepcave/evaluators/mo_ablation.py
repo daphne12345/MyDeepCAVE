@@ -100,6 +100,10 @@ class MOAblation(Ablation):
             print((preds - preds.min()) / (preds.max() - preds.min()))
             mean += w * ((preds - preds.min()) / (preds.max() - preds.min()))
             var += w * ((vars - vars.min()) / (vars.max() - vars.min()))
+
+            all_predictions = np.stack([tree.predict(cfg) for tree in model.estimators_])
+            print(np.mean(all_predictions, axis=0))
+            print(np.var(all_predictions, axis=0))
         return mean, var
 
     def calculate(

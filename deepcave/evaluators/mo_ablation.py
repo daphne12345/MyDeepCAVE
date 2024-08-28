@@ -208,8 +208,8 @@ class MOAblation(Ablation):
                 # Remove the current best hp for keeping the order right
                 hp_it.remove(max_hp)
                 print(df_abl)
-                print(df_abl.reset_index(drop=True).reset_index())
-            return df_abl.reset_index(drop=True).reset_index()
+                print(df_abl.reset_index(drop=True))
+            return df_abl.reset_index(drop=True)
 
     def _ablation(
         self,

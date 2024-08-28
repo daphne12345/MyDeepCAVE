@@ -193,7 +193,7 @@ class MOAblation(Ablation):
             df_abl = pd.DataFrame([])
             df_abl = pd.concat(
                 [df_abl,
-                 pd.DataFrame({'hp_name': 'Default', 'importance': 0, 'variance': def_std, 'new_performance': def_cost})])
+                 pd.DataFrame({'hp_name': ['Default'], 'importance': [0], 'variance': [def_std], 'new_performance': [def_cost]})])
 
             for i in range(len(hp_it)):
                 # Get the results of the current ablation iteration

@@ -565,7 +565,8 @@ class AblationPaths(StaticPlugin):
 
         fig = go.Figure(data=traces)
 
-        print(df)
+        print(df[df['hp_name'] == 'Default']['new_performance'])
+        print(df[df['hp_name'] == 'Default']['new_performance'].max())
         # Update the layout
         fig.update_layout(
             xaxis_title="Weight for Error",

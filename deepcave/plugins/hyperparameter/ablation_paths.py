@@ -532,7 +532,6 @@ class AblationPaths(StaticPlugin):
         # Sort by last fidelity now
         idx = data[selected_budget_id].groupby("hp_name")['importance'].max().sort_values(ascending=False).index
         idx = list(idx[:n_hps]) + ['Default']
-        print(idx)
 
         figure = go.Figure()
 
@@ -546,6 +545,8 @@ class AblationPaths(StaticPlugin):
                                           df['importance'])
 
         grouped_df = df.groupby(['weight', 'hp_name'])['accuracy'].sum().unstack(fill_value=0)
+
+        print(grouped_df)
 
         # Create traces for each hp_name
         traces = []
@@ -563,8 +564,6 @@ class AblationPaths(StaticPlugin):
 
         fig = go.Figure(data=traces)
 
-        print(df[df['hp_name'] == 'Default']['new_performance'])
-        print(df[df['hp_name'] == 'Default']['new_performance'].max())
         # Update the layout
         fig.update_layout(
             xaxis_title="Weight for Error",

@@ -209,7 +209,7 @@ class Importances(StaticPlugin):
 
     def load_dependency_inputs(self, run, _: Any, inputs: Dict[str, Any]) -> Dict[str, Any]:  # type: ignore # noqa: E501
         """
-        Work like 'load_inputs' but called after inputs have changed.
+        Works like 'load_inputs' but called after inputs have changed.
 
         Note
         ----
@@ -232,10 +232,9 @@ class Importances(StaticPlugin):
         objective_names = run.get_objective_names()
         objective_ids = run.get_objective_ids()
         objective_value1 = inputs["objective_id1"]["value"]
-        objective_value2 = inputs["objective_id2"]["value"]
+        objective_value2 = inputs["objective_id2"]["value"] # in the multi-objective case
 
         objective_options = get_select_options(objective_names, objective_ids)
-        # TODO: update list of options immediately
         objective_options2 = [dic for dic in objective_options if dic['value'] != objective_value1] # make sure the same objective cannot be chosen twice
         objective_options2 +=  [{'label': 'Select objective ...', 'value': -1}] # add the option to deselect the second objective
 
@@ -313,7 +312,7 @@ class Importances(StaticPlugin):
         Returns
         -------
         Dict[str, Any]
-            A serialzied dictionary.
+            A serialized dictionary.
 
         Raises
         ------
@@ -378,7 +377,7 @@ class Importances(StaticPlugin):
 
             importances = evaluator.get_importances(hp_names)
             if isinstance(objective, list):
-                if any(pd.read_json(importances)['hp_name'].isna()):
+                if any(pd.read_json(importances)['importance'].isna()):
                     logger.warning(f"Nan encountered in importance values for budget {budget}.")
             else:
                 if any(np.isnan(val) for value in importances.values() for val in value):
@@ -436,8 +435,8 @@ class Importances(StaticPlugin):
         """
 
         if inputs["objective_id2"] and inputs["objective_id2"]!=-1:
+            # MO case: other plot
             return Importances.load_ouputs_mo_fanova(inputs, outputs)
-
 
         # First selected, should always be shown first
         selected_hp_names = inputs["hyperparameter_names"]
@@ -509,7 +508,7 @@ class Importances(StaticPlugin):
     @staticmethod
     def load_ouputs_mo_fanova(inputs, outputs) -> go.Figure:  # type: ignore
         """
-        Read in raw data and prepare for layout.
+        Multi-objective case for read in raw data and prepare for layout.
 
         Note
         ----
@@ -519,8 +518,6 @@ class Importances(StaticPlugin):
 
         Parameters
         ----------
-        run
-            The selected run.
         inputs
             Input and filter values from the user.
         outputs
@@ -562,39 +559,33 @@ class Importances(StaticPlugin):
         idx = data[selected_budget_id].groupby("hp_name")['importance'].max().sort_values(ascending=False).index
         idx = idx[:n_hps]
 
-        # colors = {label: color for label, color in zip(hps, sns.color_palette('colorblind', n_colors=len(hps)))}
-
         # Create the figure
         figure = go.Figure()
-        # print(df)
-        df = data[selected_budget_id][data[selected_budget_id]['hp_name'].isin(idx)]  # only keep selected hps
-        df['weight'] = df['weight'].astype(float)
-        df['importance'] = df['importance'].astype(float)
-        df['variance'] = df['variance'].astype(float)
+        df = data[selected_budget_id][data[selected_budget_id]['hp_name'].isin(idx)]  # only keep top hps
+
+        # TODO: necessary?
+        # convert back to float after json serialization
+        for col in ['weight', 'importance', 'variance']:
+            df[col] = df[col].astype(float)
 
         # Group by 'hp_name' and plot each group
         for group_id, group_data in df.groupby('hp_name'):
             # Sort data by the weight column
             group_data = group_data.sort_values(by='weight')
-            print(group_data)
 
-            # Add the line plot
             figure.add_trace(go.Scatter(
                 x=group_data['weight'],
                 y=group_data['importance'],
                 mode='lines',
                 name=group_id,
-                # line=dict(color=colors[group_id]),
             ))
 
             # Add the shaded area representing the variance
             figure.add_trace(go.Scatter(
-                x=group_data['weight'].tolist() + group_data['weight'][::-1].tolist(),
+                x=group_data['weight'].tolist(),
                 y=(group_data['importance'] - group_data['variance']).tolist() + (group_data['importance'] + group_data[
-                    'variance'])[::-1].tolist(),
+                    'variance']).tolist(),
                 fill='toself',
-                # fillcolor=colors[group_id],
-                line=dict(color='rgba(255,255,255,0)'),
                 hoverinfo='skip',
                 showlegend=True,
                 opacity=0.2,
@@ -602,11 +593,13 @@ class Importances(StaticPlugin):
 
         # Update the layout for labels, title, and axis limits
         figure.update_layout(
-            xaxis_title='Weight for Error',
+            xaxis_title='Weight for ' + inputs["objective_id1"]["value"],
             yaxis_title='Importance',
             xaxis=dict(range=[0, 1], tickangle=-45),
             yaxis=dict(range=[0, df['importance'].max()]),
-            title='MO-fANOVA',
+            title={
+                "text": "Multi-Objective " + inputs["method"]["value"],
+                "font": {"size": config.FIGURE_FONT_SIZE + 2},},
             margin=config.FIGURE_MARGIN,
             font=dict(size=config.FIGURE_FONT_SIZE),
         )

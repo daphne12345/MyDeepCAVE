@@ -14,15 +14,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 from ConfigSpace import Configuration
 from ConfigSpace.c_util import change_hp_value
-from ConfigSpace.exceptions import ForbiddenValueError
-from ConfigSpace.hyperparameters import (
-    CategoricalHyperparameter,
-    NumericalHyperparameter,
-)
-from ConfigSpace.types import Array, f64
+
 from ConfigSpace.util import impute_inactive_values
 
-from deepcave.constants import COMBINED_COST_NAME
 from deepcave.evaluators.epm.fanova_forest import FanovaForest
 from deepcave.runs import AbstractRun
 from deepcave.runs.objective import Objective
@@ -33,7 +27,8 @@ import pandas as pd
 # https://github.com/automl/ParameterImportance/blob/f4950593ee627093fc30c0847acc5d8bf63ef84b/pimp/evaluator/local_parameter_importance.py#L27
 class MOLPI(LPI):
     """
-    Calculate the local parameter importance (LPI).
+    Calculate the multi-objective local parameter importance (LPI).
+    Override: to train the random forest with an arbitrary weighting of the objectives (multi-objective case).
 
     Properties
     ----------
@@ -66,19 +61,36 @@ class MOLPI(LPI):
 
     def get_weightings(self, objectives_normed, df):
         """
-        Returns the weighting used for the weighted importance. It uses the points on the pareto-front as weightings
-        :param objectives_normed: the normalized objective names as a list of strings
-        :param df: dataframe containing the encoded data
-        :return: the weightings as a list of lists
+        Calculates the weighting used for the weighted importance. It uses the points on the pareto-front as weightings
+
+        Parameters
+        ----------
+        objectives_normed : List[str]
+            the normalized objective names as a list of strings
+        df : pandas.dataframe
+            the dataframe containing the encoded data
+
+        Returns
+        ----------
+        weightings : numpy.ndarray[numpy.ndarray]
+             the weightings as a list of lists
         """
         optimized = self.is_pareto_efficient(df[objectives_normed].to_numpy())
         return df[optimized][objectives_normed].T.apply(lambda values: values / values.sum()).T.to_numpy()
 
     def is_pareto_efficient(self, costs):
         """
-        Find the pareto-efficient points
-        :param costs: An (n_points, n_costs) array
-        :return: A (n_points, ) boolean array, indicating whether each point is Pareto efficient
+        Find the pareto-efficient points.
+
+        Parameters
+        ----------
+        costs : numpy.ndarray
+            An (n_points, n_costs) array
+
+        Returns
+        ----------
+        is_efficient : numpy.ndarray
+             A (n_points, ) boolean array, indicating whether each point is Pareto efficient
         """
         is_efficient = np.ones(costs.shape[0], dtype=bool)
         for i, c in enumerate(costs):
@@ -142,9 +154,9 @@ class MOLPI(LPI):
         df_all = pd.DataFrame([])
         weightings = self.get_weightings(objectives_normed, df)
 
+        # calculate importance for each weighting generated from the pareto efficient points
         for w in weightings:
             Y = sum(df[obj] * weighting for obj, weighting in zip(objectives_normed, w)).to_numpy()
-            # Get model and train it
             # Use same forest as for fanova
             self._model = FanovaForest(self.cs, n_trees=n_trees, seed=seed)
             self._model.train(X, Y)
@@ -153,9 +165,17 @@ class MOLPI(LPI):
             df_res['weight'] = w[0]
             df_all = pd.concat([df_all, df_res])
         self.importances = df_all.rename(columns={0: 'importance', 1: 'variance', 'index':'hp_name'}).reset_index(drop=True)
-        self.importances = self.importances.applymap(lambda x: max(x, 0) if not isinstance(x, str) else x) #no negative values
+        self.importances = self.importances.applymap(lambda x: max(x, 0) if not isinstance(x, str) else x) # no negative values
 
     def calc_one_weighting(self):
+        """
+        Prepare the data after a model has be trained for one weighting.
+
+        Returns
+        -------
+        imp_var_dict: dict
+            Dictionary of importances and variances
+        """
         # Get neighborhood sampled on an unit-hypercube.
         neighborhood = self._get_neighborhood()
 
@@ -171,7 +191,7 @@ class MOLPI(LPI):
         # These are used for importance and hold the corresponding importance/variance over
         # neighbors. Only import if NOT quantifying importance via performance-variance across
         # neighbors.
-        # importances = {}
+
         # Nested list of values per tree in random forest.
         predictions: Dict[str, List[List[np.ndarray]]] = {}
 
@@ -267,19 +287,24 @@ class MOLPI(LPI):
         imp_var_dict = { k:(np.mean(overall_var_per_tree[k]), np.var(overall_var_per_tree[k])) for k in overall_var_per_tree}
         return  imp_var_dict
 
-    def get_importances(self, hp_names: List[str]) -> Dict[str, Tuple[float, float]]:
+    def get_importances(
+        self, hp_names: Optional[List[str]] = None, sort: bool = True
+    ) -> Dict[Union[str, Tuple[str, ...]], Tuple[float, float, float, float]]:
         """
-        Return the importances.
+        Return the importance scores from the passed Hyperparameter names.
 
         Parameters
         ----------
-        hp_names : List[str]
-            Selected Hyperparameter names to get the importance scores from.
+        hp_names : Optional[List[str]]
+            Selected Hyperparameter names to get the importance scores from. If None, all
+            Hyperparameters of the configuration space are used.
+        sort : bool, optional
+            Whether the Hyperparameters should be sorted by importance. By default True.
 
         Returns
         -------
-        importances : Dict[str, Tuple[float, float]]
-            Hyperparameter name and mean+var importance.
+        Dict
+            Dictionary with Hyperparameter names and the corresponding importance scores and variances.
 
         Raises
         ------
@@ -289,120 +314,8 @@ class MOLPI(LPI):
         if self.importances is None:
             raise RuntimeError("Importance scores must be calculated first.")
 
+        res = self.importances.sort_values(by='importance', ascending=False) if sort else self.importances
+
         if hp_names:
-            return self.importances[self.importances['hp_name'].isin(hp_names)].to_json()
-        else:
-            return self.importances.to_json()
-
-    def _get_neighborhood(self) -> Dict[str, List[Union[np.ndarray, List[np.ndarray]]]]:
-        """
-        Slight modification of ConfigSpace's get_one_exchange neighborhood.
-
-        This orders the parameter values and samples more neighbors in one go.
-        Further each and every neighbor needs to be rigorously checked if it is forbidden or not.
-
-        Returns
-        -------
-        neighborhood : Dict[str, List[Union[np.ndarray, List[np.ndarray]]]]
-            The neighborhood.
-        """
-        hp_names = list(self.cs.keys())
-
-        neighborhood: Dict[str, List[Union[np.ndarray, List[np.ndarray]]]] = {}
-        for hp_idx, hp_name in enumerate(hp_names):
-            # Check if hyperparameter is active
-            if not np.isfinite(self.incumbent_array[hp_idx]):
-                continue
-
-            hp_neighborhood = []
-            checked_neighbors = []  # On unit cube
-            checked_neighbors_non_unit_cube = []  # Not on unit cube
-            hp = self.cs[hp_name]
-            num_neighbors = hp.get_num_neighbors(self.incumbent[hp_name])
-
-            neighbors: Union[List[Union[f64]], Array[Union[f64]]]
-
-            if num_neighbors == 0:
-                continue
-            elif np.isinf(num_neighbors):
-                assert isinstance(hp, NumericalHyperparameter)
-                if hp.log:
-                    base = np.e
-                    log_lower = np.log(hp.lower) / np.log(base)
-                    log_upper = np.log(hp.upper) / np.log(base)
-                    neighbors_range = np.logspace(
-                        start=log_lower,
-                        stop=log_upper,
-                        num=self.continous_neighbors,
-                        endpoint=True,
-                        base=base,
-                    )
-                else:
-                    neighbors_range = np.linspace(hp.lower, hp.upper, self.continous_neighbors)
-                neighbors = list(map(lambda x: hp.to_vector(x), neighbors_range))
-            else:
-                neighbors = hp.neighbors_vectorized(self.incumbent_array[hp_idx], n=4, seed=self.rs)
-
-            for neighbor in neighbors:
-                if neighbor in checked_neighbors:
-                    continue
-
-                new_array = self.incumbent_array.copy()
-                new_array = change_hp_value(self.cs, new_array, hp_name, neighbor, hp_idx)
-
-                try:
-                    new_config = Configuration(self.cs, vector=new_array)
-                    hp_neighborhood.append(new_config)
-                    new_config.check_valid_configuration()
-                    self.cs.check_configuration_vector_representation(new_array)
-
-                    checked_neighbors.append(neighbor)
-                    checked_neighbors_non_unit_cube.append(new_config[hp_name])
-                except (ForbiddenValueError, ValueError):
-                    pass
-
-            sort_idx = list(
-                map(lambda x: x[0], sorted(enumerate(checked_neighbors), key=lambda y: y[1]))
-            )
-            if isinstance(self.cs[hp_name], CategoricalHyperparameter):
-                checked_neighbors_non_unit_cube_categorical = list(
-                    np.array(checked_neighbors_non_unit_cube)[sort_idx]
-                )
-                neighborhood[hp_name] = [
-                    np.array(checked_neighbors)[sort_idx],
-                    checked_neighbors_non_unit_cube_categorical,
-                ]
-            else:
-                checked_neighbors_non_unit_cube_non_categorical = np.array(
-                    checked_neighbors_non_unit_cube
-                )[sort_idx]
-                neighborhood[hp_name] = [
-                    np.array(checked_neighbors)[sort_idx],
-                    checked_neighbors_non_unit_cube_non_categorical,
-                ]
-
-        return neighborhood
-
-    def _predict_mean_var(self, config: Configuration) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Small wrapper to predict marginalized over instances.
-
-        Parameter
-        ---------
-        config:Configuration
-            The self.incumbent of which the performance across the whole instance set is to be
-            estimated.
-
-        Returns
-        -------
-        mean: np.ndarray
-            The mean performance over the instance set.
-        var: np.ndarray
-            The variance over the instance set. If logged values are used, the variance might not
-            be able to be used.
-        """
-        config = impute_inactive_values(config)
-        array = np.array([config.get_array()])
-        mean, var = self._model.predict_marginalized(array)
-
-        return mean.squeeze(), var.squeeze()
+            res = res[self.importances['hp_name'].isin(hp_names)]
+        return res.to_json()

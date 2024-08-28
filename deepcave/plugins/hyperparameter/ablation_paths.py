@@ -218,14 +218,11 @@ class AblationPaths(StaticPlugin):
         objective_names = run.get_objective_names()
         objective_ids = run.get_objective_ids()
         objective_value1 = inputs["objective_id1"]["value"]
-        objective_value2 = inputs["objective_id2"]["value"]
+        objective_value2 = inputs["objective_id2"]["value"] # in the multi-objective case
 
         objective_options = get_select_options(objective_names, objective_ids)
-
-        objective_options2 = [dic for dic in objective_options if
-                              dic['value'] != objective_value1]  # make sure the same objective cannot be chosen twice
-        objective_options2 += [
-            {'label': 'Select objective ...', 'value': -1}]  # add the option to deselect the second objective
+        objective_options2 = [dic for dic in objective_options if dic['value'] != objective_value1] # make sure the same objective cannot be chosen twice
+        objective_options2 +=  [{'label': 'Select objective ...', 'value': -1}] # add the option to deselect the second objective
 
         # Prepare budgets
         budgets = run.get_budgets(human=True)
@@ -233,7 +230,7 @@ class AblationPaths(StaticPlugin):
         budget_options = get_checklist_options(budgets, budget_ids)
         budget_value = inputs["budget_id"]["value"]
 
-        hp_names = run.configspace.get_hyperparameter_names()
+        hp_names = list(run.configspace.keys())
         n_hps = inputs["n_hps"]["value"]
 
         # Pre-set values
@@ -318,7 +315,6 @@ class AblationPaths(StaticPlugin):
         data = {}
         for budget_id, budget in enumerate(budgets):
             assert isinstance(budget, (int, float))
-            assert isinstance(budget, (int, float))
             evaluator.calculate(objective, budget, n_trees=n_trees, seed=0)
             if isinstance(objective, list):
                 data[budget_id] = evaluator.get_importances()
@@ -344,6 +340,7 @@ class AblationPaths(StaticPlugin):
         List[dcc.Graph]
             Layout for the output block.
         """
+        # TODO remove second Figure if MO-Ablation
         return [
             dcc.Graph(
                 register("perf_graph", "figure"),
@@ -383,6 +380,7 @@ class AblationPaths(StaticPlugin):
             The figures of the ablation paths.
         """
         if inputs["objective_id2"] and inputs["objective_id2"]!=-1:
+            # MO case: other plot
             return AblationPaths.load_outputs_mo(inputs, outputs)
 
 
@@ -485,10 +483,9 @@ class AblationPaths(StaticPlugin):
         return [figure1, figure2]
 
     @staticmethod
-
-    def load_outputs_mo(inputs, outputs) -> List[go.Figure]:  # type: ignore
+    def load_outputs_mo(inputs, outputs) -> List[go.Figure| None]:  # type: ignore
         """
-        Read in raw data and prepare for layout.
+        Multi-objective case for read in raw data and prepare for layout.
 
         Note
         ----
@@ -498,8 +495,6 @@ class AblationPaths(StaticPlugin):
 
         Parameters
         ----------
-        run
-            The selected run.
         inputs
             Input and filter values from the user.
         outputs
@@ -507,8 +502,8 @@ class AblationPaths(StaticPlugin):
 
         Returns
         -------
-        return [figure1, figure2]
-            The figures of the ablation paths.
+        return [figure1, None]
+            The figure of the ablation paths.
         """
         # First selected, should always be shown first
         selected_budget_id = inputs["budget_id"]
@@ -534,10 +529,11 @@ class AblationPaths(StaticPlugin):
         idx = list(idx[:n_hps]) + ['Default']
 
         df = data[selected_budget_id][data[selected_budget_id]['hp_name'].isin(idx)]  # only keep selected hps
-        df['weight'] = df['weight'].astype(float)
-        df['importance'] = df['importance'].astype(float)
-        df['variance'] = df['variance'].astype(float)
-        df['new_performance'] = df['new_performance'].astype(float)
+
+        # TODO: necessary?
+        # convert back to float after json serialization
+        for col in ['weight', 'importance', 'variance', 'new_performance']:
+            df[col] = df[col].astype(float)
 
         df['accuracy'] = np.where(df['hp_name'] == 'Default', 1 - df['new_performance'],
                                           df['importance'])
@@ -562,10 +558,10 @@ class AblationPaths(StaticPlugin):
 
         # Update the layout
         fig.update_layout(
-            xaxis_title="Weight for Error",
+            xaxis_title="Weight for " + inputs["objective_id1"]["value"],
             yaxis_title="Importance",
             title={
-                "text": "MO Ablation Path",
+                "text": "Multi-Objective Ablation Path",
                 "font": {"size": config.FIGURE_FONT_SIZE + 2},},
             xaxis=dict(range=[0, 1], tickangle=-45),
             yaxis=dict(

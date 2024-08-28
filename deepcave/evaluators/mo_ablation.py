@@ -54,7 +54,6 @@ class MOAblation(Ablation):
         super().__init__(run)
         self.models = []
         self.df_importances = pd.DataFrame([])
-        self.default = 0
 
     def get_importances(self):
         return self.df_importances.to_json()
@@ -158,8 +157,6 @@ class MOAblation(Ablation):
             self.df_importances = pd.concat([self.df_importances, df_res])
         self.df_importances = self.df_importances.reset_index(drop=True)
         print(self.df_importances)
-        self.default = [model.predict(np.array([self.run.encode_config(self.cs.get_default_configuration(), specific=True)])) for model in self.models]
-        print(self.default)
 
 
     def calculate_ablation_path(self, df, objectives_normed, weighting, budget):

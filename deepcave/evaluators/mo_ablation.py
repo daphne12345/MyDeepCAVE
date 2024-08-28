@@ -26,7 +26,6 @@ from deepcave.runs import AbstractRun
 from deepcave.runs.objective import Objective
 from deepcave.utils.logs import get_logger
 import pandas as pd
-from sklearn.ensemble import RandomForestRegressor
 
 class MOAblation(Ablation):
     """
@@ -94,17 +93,9 @@ class MOAblation(Ablation):
         """
         mean, var = 0, 0
         for model, w in zip(self.models, weighting):
-            # preds, vars = model.predict(np.array([cfg]))
-            # print(preds)
-            # print(preds - preds.min())
-            # print(preds.max() - preds.min())
-            # print((preds - preds.min()) / (preds.max() - preds.min()))
-            # mean += w * ((preds - preds.min()) / (preds.max() - preds.min()))
-            # var += w * ((vars - vars.min()) / (vars.max() - vars.min()))
-
-            all_predictions = np.stack([tree.predict(cfg) for tree in model.estimators_])
-            print(np.mean(all_predictions, axis=0))
-            print(np.var(all_predictions, axis=0))
+            pred, var_ = model.predict(np.array([cfg]))
+            mean += w * pred[0]
+            var += w * var_[0]
         return mean, var
 
     def calculate(
@@ -151,9 +142,8 @@ class MOAblation(Ablation):
             objectives_normed.append(normed)
 
             # train one model per objective
-            Y = df[obj.name].to_numpy()
-            # model = RandomForestSurrogate(self.cs, seed=seed, n_trees=n_trees)
-            model = RandomForestRegressor(max_depth=n_trees, random_state=seed)
+            Y = df[normed].to_numpy()
+            model = RandomForestSurrogate(self.cs, seed=seed, n_trees=n_trees)
             model._fit(X, Y)
             self.models.append(model)
 

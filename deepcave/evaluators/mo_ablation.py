@@ -132,6 +132,8 @@ class MOAblation(Ablation):
         df = df.dropna(subset=[obj.name for obj in objectives])
         X = df[list(self.run.configspace.keys())].to_numpy()
 
+        print(X)
+
         # normalize objectives
         objectives_normed = list()
         for obj in objectives:
@@ -150,10 +152,13 @@ class MOAblation(Ablation):
 
         for w in weightings:
             df_res = self.calculate_ablation_path(df, objectives_normed, w, budget)
+            print(df_res)
             df_res = df_res.drop(columns=['index'])
             df_res['weight'] = w[0]
             self.df_importances = pd.concat([self.df_importances, df_res])
+        print(self.df_importances)
         self.default = [model.predict([self.run.encode_config(self.cs.get_default_configuration(), specific=True)]) for model in self.models]
+        print(self.default)
 
 
     def calculate_ablation_path(self, df, objectives_normed, weighting, budget):

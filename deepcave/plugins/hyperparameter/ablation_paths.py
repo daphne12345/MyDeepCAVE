@@ -381,7 +381,7 @@ class AblationPaths(StaticPlugin):
         """
         if inputs["objective_id2"] and inputs["objective_id2"]!=-1:
             # MO case: other plot
-            return AblationPaths.load_outputs_mo(inputs, outputs)
+            return AblationPaths.load_outputs_mo(run, inputs, outputs)
 
 
         # First selected, should always be shown first
@@ -483,7 +483,7 @@ class AblationPaths(StaticPlugin):
         return [figure1, figure2]
 
     @staticmethod
-    def load_outputs_mo(inputs, outputs) -> List[go.Figure]:  # type: ignore
+    def load_outputs_mo(run, inputs, outputs) -> List[go.Figure]:  # type: ignore
         """
         Multi-objective case for read in raw data and prepare for layout.
 
@@ -495,6 +495,8 @@ class AblationPaths(StaticPlugin):
 
         Parameters
         ----------
+        run
+            The selected run.
         inputs
             Input and filter values from the user.
         outputs
@@ -506,6 +508,7 @@ class AblationPaths(StaticPlugin):
             The figure of the ablation paths.
         """
         # First selected, should always be shown first
+        objective1 = run.get_objective(inputs["objective_id1"])
         selected_budget_id = inputs["budget_id"]
         n_hps = inputs["n_hps"]
 
@@ -558,7 +561,7 @@ class AblationPaths(StaticPlugin):
 
         # Update the layout
         fig.update_layout(
-            xaxis_title="Weight for " + inputs["objective_id1"]["value"],
+            xaxis_title="Weight for " + objective1,
             yaxis_title="Importance",
             title={
                 "text": "Multi-Objective Ablation Path",

@@ -506,7 +506,7 @@ class Importances(StaticPlugin):
         return figure
 
     @staticmethod
-    def load_ouputs_mo_fanova(inputs, outputs) -> go.Figure:  # type: ignore
+    def load_ouputs_mo_fanova(run, inputs, outputs) -> go.Figure:  # type: ignore
         """
         Multi-objective case for read in raw data and prepare for layout.
 
@@ -518,6 +518,8 @@ class Importances(StaticPlugin):
 
         Parameters
         ----------
+        run
+            The selected run.
         inputs
             Input and filter values from the user.
         outputs
@@ -530,6 +532,7 @@ class Importances(StaticPlugin):
         """
 
         # First selected, should always be shown first
+        objective1 = run.get_objective(inputs["objective_id1"])
         selected_hp_names = inputs["hyperparameter_names"]
         selected_budget_ids = inputs["budget_ids"]
         n_hps = inputs["n_hps"]
@@ -593,7 +596,7 @@ class Importances(StaticPlugin):
 
         # Update the layout for labels, title, and axis limits
         figure.update_layout(
-            xaxis_title='Weight for ' + inputs["objective_id1"]["value"],
+            xaxis_title='Weight for ' + objective1,
             yaxis_title='Importance',
             xaxis=dict(range=[0, 1], tickangle=-45),
             yaxis=dict(range=[0, df['importance'].max()]),

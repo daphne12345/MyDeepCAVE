@@ -68,7 +68,7 @@ class MOAblation(Ablation):
         RuntimeError
             If the important scores are not calculated.
         """
-        if self.importances is None:
+        if self.df_importances is None:
             raise RuntimeError("Importance scores must be calculated first.")
 
         return self.df_importances.to_json()

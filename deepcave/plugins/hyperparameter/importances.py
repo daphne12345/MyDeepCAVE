@@ -532,7 +532,7 @@ class Importances(StaticPlugin):
         """
 
         # First selected, should always be shown first
-        objective1 = run.get_objective(inputs["objective_id1"])
+        objective1 = run.get_objective(inputs["objective_id1"]).name
         selected_hp_names = inputs["hyperparameter_names"]
         selected_budget_ids = inputs["budget_ids"]
         n_hps = inputs["n_hps"]

@@ -508,7 +508,7 @@ class AblationPaths(StaticPlugin):
             The figure of the ablation paths.
         """
         # First selected, should always be shown first
-        objective1 = run.get_objective(inputs["objective_id1"])
+        objective1 = run.get_objective(inputs["objective_id1"]).name
         selected_budget_id = inputs["budget_id"]
         n_hps = inputs["n_hps"]
 

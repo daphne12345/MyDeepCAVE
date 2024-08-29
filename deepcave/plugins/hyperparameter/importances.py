@@ -436,7 +436,7 @@ class Importances(StaticPlugin):
 
         if inputs["objective_id2"] and inputs["objective_id2"]!=-1:
             # MO case: other plot
-            return Importances.load_ouputs_mo_fanova(inputs, outputs)
+            return Importances.load_ouputs_mo_fanova(run, inputs, outputs)
 
         # First selected, should always be shown first
         selected_hp_names = inputs["hyperparameter_names"]

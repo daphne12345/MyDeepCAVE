@@ -601,7 +601,7 @@ class Importances(StaticPlugin):
             xaxis=dict(range=[0, 1], tickangle=-45),
             yaxis=dict(range=[0, df['importance'].max()]),
             title={
-                "text": "Multi-Objective " + inputs["method"]["value"],
+                "text": "Multi-Objective " + inputs["method"],
                 "font": {"size": config.FIGURE_FONT_SIZE + 2},},
             margin=config.FIGURE_MARGIN,
             font=dict(size=config.FIGURE_FONT_SIZE),

@@ -483,7 +483,7 @@ class AblationPaths(StaticPlugin):
         return [figure1, figure2]
 
     @staticmethod
-    def load_outputs_mo(inputs, outputs) -> List[go.Figure| None]:  # type: ignore
+    def load_outputs_mo(inputs, outputs) -> List[go.Figure]:  # type: ignore
         """
         Multi-objective case for read in raw data and prepare for layout.
 

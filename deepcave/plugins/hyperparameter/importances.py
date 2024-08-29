@@ -585,12 +585,12 @@ class Importances(StaticPlugin):
 
             # Add the shaded area representing the variance
             figure.add_trace(go.Scatter(
-                x=group_data['weight'].tolist(),
-                y=(group_data['importance'] - group_data['variance']).tolist() + (group_data['importance'] + group_data[
-                    'variance']).tolist(),
+                x=group_data['weight']+group_data['weight'][::-1],
+                y=(group_data['importance'] - group_data['variance']) + (group_data['importance'] + group_data[
+                    'variance'])[::-1],
                 fill='toself',
                 hoverinfo='skip',
-                showlegend=True,
+                showlegend=False,
                 opacity=0.2,
             ))
 
